@@ -22,6 +22,8 @@ The design traces directly to the acceptance criteria in `requirements.md`; requ
 - Independent concurrent writes with no lost updates, enforced via optimistic concurrency on Card and Comment edits (R14.5, R13).
 - Target p95 < 300 ms for regular (non-search, non-analytics, non-permanent-delete) requests; `GET /api/health` is public, returns 200, and never touches the database (R14.2).
 
+The p95 latency (R14.1) and 99.5% availability (R14.2) figures are design targets for the application under normal operation, not guarantees about the hosting tier. On the free deployment tiers, a Render backend cold start after idle and a Supabase project resuming from its inactivity pause can make the first request after idle exceed these targets; such cold-start and resume latencies are expected and fall outside the steady-state targets.
+
 ## Architecture
 
 ### High-Level Topology
@@ -127,6 +129,11 @@ Role resolution reads the stored `BoardMembership` (and, for Team-scoped endpoin
 
 All multi-step mutations (atomic multi-field updates R1.10/R3.10, reindexing R2.3/R2.5/R4.2, cascade delete R1.6/R5.4, create-with-side-effects) execute inside a single database transaction. Side effects that must be consistent with the primary write—Activity_Entry recording (R8) and Notification creation (R6.1)—are committed in the same transaction as the triggering operation so that an activity/notification exists if and only if its triggering mutation succeeded.
 
+Two creation flows are explicitly single-transaction:
+
+- **Board creation** persists the Board, the creator's Admin `BoardMembership`, and the three default Columns ("To Do", "Doing", "Done" at indices 0, 1, 2) together in one transaction, so a Board never exists without its creator-Admin membership or its default Columns (R1.1, R1.2, R1.11, R1.12).
+- **Team_Join_Link acceptance** creates the joining User's `team_regular` `TeamMembership` in a single transaction, so the membership either exists in full or not at all (R17.3).
+
 ## Components and Interfaces
 
 ### Backend Layering
@@ -183,6 +190,7 @@ All application code lives under `frontend/src/` (`app/` for App Router pages, `
 - **State/data:** One typed API client in `src/lib/apiClient.ts` that calls same-origin `/api/...` paths (proxied to the backend by Next.js rewrites, never the backend URL). Authentication relies on `HttpOnly` cookies the browser sends automatically; the client never reads, stores, or attaches tokens, and nothing goes in `localStorage`/`sessionStorage`. On a `401` it calls the refresh endpoint once and retries, except on the auth endpoints and public pages. API request/response types are camelCase and live in `src/types/api.ts`. Board responses carry `currentUserRole` (`admin | member | guest`) and Team responses carry `currentUserTeamRole`; `GET /api/auth/me` returns identity only. The client never decodes tokens.
 - **Notifications:** Polled on an interval through `useNotifications`. Each poll requests the newest page **without a cursor**; `nextCursor` is used only to load older pages on demand (R6.2, R6.6).
 - **Drag-and-drop:** Uses `@dnd-kit/core` + `@dnd-kit/sortable`. A hook computes the target column id and target order index, then calls the move endpoint; UI optimistically reorders and reconciles with the server's authoritative positions, rolling back on error (R4.3, R13).
+- **Mentions:** The mention picker inserts the token `@[<userId>]` into the Comment body when the user picks a Board member from `GET /api/boards/{boardId}/members`, and renders each token as `@displayName` (as plain text) by looking the id up in that members list, or as `@unknown` when the id is not found.
 - **Token pages:** `/invite/[token]` and `/join/[token]` send `Referrer-Policy: no-referrer` (configured in `next.config.ts`) and never leak the token into links, analytics, or storage.
 - **Responsive layout:** Tailwind breakpoints (`lg:` = 1024px) render a horizontally laid out board at >= 1024px and a stacked/scrollable-per-column layout below it, avoiding horizontal page scroll and overlap (R14.3, R14.4).
 
@@ -311,13 +319,13 @@ Registration creates an account only; it does not log the user in and issues no 
 | --- | --- | --- | --- | --- |
 | POST | `/api/boards` | Team_Member of target Team | Create board (+3 default columns), creator becomes Admin | R1.1, R1.2, R1.8, R1.11, R1.12 |
 | GET | `/api/boards` | authenticated | List active boards the user is a member of (or archived boards they Admin with `?archived`) | R1.4, R1.5, R1.13 |
-| GET | `/api/boards/{boardId}` | Member/Admin | Fetch board incl. `currentUserRole` | R1.14, R12.1 |
+| GET | `/api/boards/{boardId}` | Member/Admin | Fetch board incl. `currentUserRole` | R12.1, R12.3 |
 | PATCH | `/api/boards/{boardId}` | Admin | Partial update name/description/visibility atomically | R1.3, R1.7, R1.8, R1.10, R1.14 |
 | POST | `/api/boards/{boardId}/archive` | Admin | Archive | R1.4, R1.7 |
 | POST | `/api/boards/{boardId}/restore` | Admin | Restore if archived | R1.5, R1.7, R1.9 |
 | DELETE | `/api/boards/{boardId}` | Admin | Permanent delete + cascade (`204`) | R1.6, R1.7 |
 
-Board creation is open to any Team_Member of the target Team (not a pre-existing Admin); the creator is granted the Admin role on the new Board, effective immediately on subsequent requests since roles are read from stored membership (R1.1, R1.11, R1.12). `GET /api/boards` returns only Boards the caller is a member of, active unless `?archived` is supplied, in which case only archived Boards where the caller is Admin (R1.13). `PATCH` accepts any subset of `{name, description, visibility}`; omitted fields are left unchanged; any invalid supplied field rejects the whole request atomically (R1.3, R1.10). `visibility` is stored but has no access effect in V1 (R1.14). Non-Admins are rejected with an authorization error and no change (R1.7).
+Board creation is open to any Team_Member of the target Team (not a pre-existing Admin); the creator is granted the Admin role on the new Board, effective immediately on subsequent requests since roles are read from stored membership (R1.1, R1.11, R1.12). `GET /api/boards` returns only Boards the caller is a member of, active unless `?archived` is supplied, in which case only archived Boards where the caller is Admin (R1.13). `GET /api/boards/{boardId}` returns the Board to any Member or Admin and includes `currentUserRole` (`admin` or `member`), resolved from the caller's stored `BoardMembership` on this request (R12.1, R12.3). `visibility` is stored but does not affect access in V1: access is governed only by stored `BoardMembership`, so the `visibility` value never widens or narrows who can read the Board (R1.14). `PATCH` accepts any subset of `{name, description, visibility}`; omitted fields are left unchanged; any invalid supplied field rejects the whole request atomically (R1.3, R1.10). Non-Admins are rejected with an authorization error and no change (R1.7).
 
 ### Column_Service (R2)
 
@@ -346,7 +354,7 @@ Move body: `{ "targetColumnId": id, "targetIndex": int }`. Validations: target c
 
 | Method | Path | Min Role | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| GET | `/api/cards/{cardId}/comments` | Member/Admin | List comments as a flat list with `parentCommentId`, oldest first, incl. `version` | R13.1 |
+| GET | `/api/cards/{cardId}/comments` | Member/Admin | List comments as a flat list with `parentCommentId`, oldest first, incl. `version` | R13.1, R12.2, R12.3 |
 | POST | `/api/cards/{cardId}/comments` | Member/Admin | Create top-level or reply (`parentCommentId`) | R5.1, R5.2, R5.6, R5.7, R5.8 |
 | PATCH | `/api/comments/{commentId}` | Member/Admin (author) | Edit own; set `edited_at`, requires `version` | R5.3, R5.5, R5.7, R13 |
 | DELETE | `/api/comments/{commentId}` | Member/Admin (author) | Delete own + cascade replies (`204`) | R5.4, R5.5, R5.6 |
@@ -376,13 +384,13 @@ Ordering: `created_at DESC, id DESC`. The frontend polls the newest page **witho
 | --- | --- | --- | --- | --- |
 | GET | `/api/boards/{boardId}/activity?page=` | Member/Admin | Paged activity, newest first, <=100/page | R8.12, R8.13, R8.14, R8.15 |
 
-Ordering `created_at DESC, id DESC`, 100 per page (R8.12). Each entry includes event type, timestamp, actor identity, affected resource id (R8.13). A page index that is negative or beyond the last page returns an empty page (R8.15). Activity is readable only by Members and Admins; Guests are rejected, as are callers with no role (R8.14). Activity writing is performed internally by the triggering services in the same transaction (R8.1–R8.11).
+Ordering `created_at DESC, id DESC`, 100 per page (R8.12). Each entry includes event type, timestamp, actor identity, affected resource id (R8.13). The `page` query parameter is zero-based (page `0` is the newest page); a non-integer `page` returns a `ValidationError`. A page index that is negative or beyond the last page returns an empty page (R8.15). The response is `{ items, page, pageSize }` with no `hasMore` or `totalPages`. Activity is readable only by Members and Admins; Guests are rejected, as are callers with no role (R8.14). Activity writing is performed internally by the triggering services in the same transaction (R8.1–R8.11).
 
 ### Analytics_Service (R9)
 
 | Method | Path | Min Role | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| GET | `/api/boards/{boardId}/analytics` | Member+ | Totals, per-column counts, completion rate, activity-by-day | R9.1–R9.6 |
+| GET | `/api/boards/{boardId}/analytics` | Member+ | Totals, per-column counts, completion rate, activity-by-day | R9.1–R9.6, R12.3, R12.5 |
 
 Response: `{ totalCards, perColumn: [{columnId, count}], completionRate, activityByDay: [{day, count}] }`. `completionRate` = (sum of card counts across all columns named exactly "Done") / totalCards, in `[0.0, 1.0]` (R9.3); `0` when zero cards (R9.4) or no "Done" column (R9.6). Activity grouped by UTC calendar day (R9.5).
 
@@ -390,13 +398,13 @@ Response: `{ totalCards, perColumn: [{columnId, count}], completionRate, activit
 
 | Method | Path | Min Role | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| GET | `/api/boards/{boardId}/members` | Member/Admin | List members `{ items: [{ userId, displayName, role }] }` | R10.9 |
+| GET | `/api/boards/{boardId}/members` | Member/Admin | List members `{ items: [{ userId, displayName, role }] }` | R10.9, R12.3 |
 | POST | `/api/boards/{boardId}/members` | Admin | Add member `{ userId, role }` (must be a Team_Member of the Board's Team) | R10.1, R10.4, R10.5, R10.7, R10.8 |
 | PATCH | `/api/boards/{boardId}/members/{userId}` | Admin | Change role (effective on the member's next request) | R10.3, R10.6, R10.7 |
 | DELETE | `/api/boards/{boardId}/members/{userId}` | Admin | Remove member (`204`) | R10.2, R10.6, R10.7 |
-| GET | `/api/boards/{boardId}/invitations` | Admin | List Invitation_Links `{ token, status, createdAt }` | R11.9, R11.7 |
-| POST | `/api/boards/{boardId}/invitations` | Admin | Generate invitation link | R11.1, R11.7 |
-| POST | `/api/invitations/{token}/revoke` | Admin | Revoke link (set inactive) | R11.2, R11.7 |
+| GET | `/api/boards/{boardId}/invitations` | Admin | List Invitation_Links (InvitationLink schema) | R11.9, R11.7 |
+| POST | `/api/boards/{boardId}/invitations` | Admin | Generate invitation link (InvitationLink schema) | R11.1, R11.7 |
+| POST | `/api/invitations/{token}/revoke` | Admin | Revoke link (set inactive; InvitationLink schema) | R11.2, R11.7 |
 
 `POST members` takes `{ userId, role }`; the target `userId` must be a Team_Member of the Board's Team (else validation error, R10.8). Invite with a role other than member/admin → validation error (R10.4); adding an existing member → validation error (R10.5). Any removal/role-change that would leave zero Admins → validation error (R10.6). Non-Admins rejected (R10.7, R11.7). A member grant records a "member joined" activity (R8.10); removal records "member removed" (R8.11). Because roles come from stored `BoardMembership`, a role change or removal applies on the member's next request without a token refresh (R10.2, R10.3).
 
@@ -407,9 +415,9 @@ Response: `{ totalCards, perColumn: [{columnId, count}], completionRate, activit
 | POST | `/api/teams` | authenticated | Create Team; creator becomes `team_admin` (`201`) | R16.1, R16.2 |
 | GET | `/api/teams` | authenticated | List the caller's Teams `{ items }` incl. `currentUserTeamRole` | R16.3, R16.6 |
 | GET | `/api/teams/{teamId}/members` | Team_Member | List members `{ items: [{ userId, displayName, teamRole }] }` | R16.4, R16.5 |
-| POST | `/api/teams/{teamId}/join-links` | Team_Admin | Generate join link (`201`; `{ id, token, status, expiresAt }`) | R17.1, R17.6 |
-| GET | `/api/teams/{teamId}/join-links` | Team_Admin | List join links `{ token, status, expiresAt, createdAt }` | R17.9, R17.6 |
-| POST | `/api/team-join-links/{token}/revoke` | Team_Admin | Revoke join link (set inactive) | R17.2, R17.6 |
+| POST | `/api/teams/{teamId}/join-links` | Team_Admin | Generate join link (`201`; TeamJoinLink schema) | R17.1, R17.6 |
+| GET | `/api/teams/{teamId}/join-links` | Team_Admin | List join links (TeamJoinLink schema) | R17.9, R17.6 |
+| POST | `/api/team-join-links/{token}/revoke` | Team_Admin | Revoke join link (set inactive; TeamJoinLink schema) | R17.2, R17.6 |
 | GET | `/api/team-join-links/{token}` | authenticated | Preview bound Team name `{ teamName }` | R17.8 |
 | POST | `/api/team-join-links/{token}/accept` | authenticated | Join bound Team as `team_regular` → `{ teamId }` | R17.3, R17.4, R17.5, R17.7 |
 
@@ -421,10 +429,246 @@ Anonymous, read-only Guest endpoints live under `/api/guest/<token>/...`, accept
 
 | Method | Path | Auth | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| GET | `/api/guest/{token}/board` | none (token) | Board `{ id, name, description, currentUserRole: "guest" }` with Columns and Cards nested | R11.3 |
-| GET | `/api/guest/{token}/cards/{cardId}/comments` | none (token) | Flat Comment list with `parentCommentId`, oldest first | R11.3 |
+| GET | `/api/guest/{token}/board` | none (token) | Board `{ id, name, description, currentUserRole: "guest" }` with Columns and Cards nested | R11.3, R11.4, R11.5, R11.6, R11.8 |
+| GET | `/api/guest/{token}/cards/{cardId}/comments` | none (token) | Flat Comment list with `parentCommentId`, oldest first | R11.3, R11.4, R11.5, R11.6, R11.8 |
 
 One function resolves the token to its Board and raises `AuthorizationError` for an unknown, inactive, or revoked token, and for a token whose Board is archived (R11.5, R11.6, R11.8). A `cardId` outside the token's Board raises `NotFoundError`. Any non-GET method on a `/api/guest/` route returns `403 AuthorizationError` (not `405`) (R11.4). Guest responses never include emails, `version`, or Activity data; Users appear only as `{ id, displayName }`. Guests cannot see Activity, search, notifications, or analytics (R8.14).
+
+### API Response Schemas
+
+These are the camelCase JSON shapes returned by the endpoints above. Field names are the camelCase form of the snake_case Data Model columns (conversion happens only in `common/serialization.py`); `currentUserRole` and `currentUserTeamRole` are the only fields not stored on an entity. UUIDs are strings; timestamps are ISO 8601 UTC strings; `type | null` marks a nullable field; enum values are listed with their exact stored spelling (values are never camelCased). No response includes `passwordHash`, and no token appears in a body except on the two link-creation shapes that explicitly return `token` (`TeamJoinLink`, `InvitationLink`). Guest responses expose Users only as `{ id, displayName }` and never include emails, `version`, or Activity.
+
+**User** (identity; returned by `GET /api/auth/me` and inside `login`) — the only shape that exposes `email`:
+```
+{
+  id: string,
+  email: string,
+  displayName: string
+}
+```
+
+**Team** (item of `GET /api/teams`, result of `POST /api/teams`):
+```
+{
+  id: string,
+  name: string,
+  currentUserTeamRole: "team_admin" | "team_regular",
+  createdAt: string,
+  updatedAt: string
+}
+```
+
+**TeamMember** (item of `GET /api/teams/{teamId}/members`):
+```
+{
+  userId: string,
+  displayName: string,
+  teamRole: "team_admin" | "team_regular"
+}
+```
+
+**TeamJoinLink** (result of `POST /api/teams/{teamId}/join-links`, item of `GET /api/teams/{teamId}/join-links`) — returns `token` because the endpoint issues the link; `isExpired` is derived on the server at read time (`expiresAt` is in the past) and is never stored:
+```
+{
+  id: string,
+  teamId: string,
+  token: string,
+  status: "active" | "inactive",
+  expiresAt: string,
+  createdAt: string,
+  isExpired: boolean
+}
+```
+
+**TeamJoinLinkPreview** (result of `GET /api/team-join-links/{token}`):
+```
+{
+  teamName: string
+}
+```
+
+**Board** (result of `GET /api/boards/{boardId}` and items of `GET /api/boards`):
+```
+{
+  id: string,
+  teamId: string,
+  name: string,
+  description: string,
+  visibility: "private" | "team",
+  status: "active" | "archived",
+  currentUserRole: "admin" | "member",
+  createdAt: string,
+  updatedAt: string
+}
+```
+
+**BoardMember** (item of `GET /api/boards/{boardId}/members`):
+```
+{
+  userId: string,
+  displayName: string,
+  role: "admin" | "member"
+}
+```
+
+**Column** (nested in Board detail and standalone responses):
+```
+{
+  id: string,
+  boardId: string,
+  name: string,
+  orderIndex: number,
+  createdAt: string
+}
+```
+
+**Card** (result of `GET /api/cards/{cardId}`, create, edit, move):
+```
+{
+  id: string,
+  columnId: string,
+  boardId: string,
+  title: string,
+  description: string,
+  assigneeId: string | null,
+  dueDate: string | null,
+  createdById: string,
+  orderIndex: number,
+  version: number,
+  createdAt: string,
+  updatedAt: string
+}
+```
+
+**Comment** (flat list item from `GET /api/cards/{cardId}/comments`, create, edit):
+```
+{
+  id: string,
+  cardId: string,
+  authorId: string,
+  parentCommentId: string | null,
+  body: string,
+  version: number,
+  createdAt: string,
+  editedAt: string | null
+}
+```
+
+**Notification** (item of the paginated Notification response):
+```
+{
+  id: string,
+  recipientId: string,
+  commentId: string,
+  boardId: string,
+  status: "unread" | "read",
+  createdAt: string
+}
+```
+
+**ActivityEntry** (item of the paginated Activity response):
+```
+{
+  id: string,
+  boardId: string,
+  actorId: string,
+  eventType: "card_created" | "card_updated" | "card_moved" | "card_deleted"
+    | "comment_created" | "comment_edited" | "comment_deleted"
+    | "column_created" | "column_deleted" | "member_joined" | "member_removed",
+  resourceId: string,
+  secondaryResourceId: string | null,
+  createdAt: string
+}
+```
+
+**InvitationLink** (result of `POST /api/boards/{boardId}/invitations`, item of `GET /api/boards/{boardId}/invitations`) — returns `token` because the endpoint issues the link:
+```
+{
+  id: string,
+  boardId: string,
+  token: string,
+  status: "active" | "inactive",
+  createdAt: string
+}
+```
+
+**Analytics response** (result of `GET /api/boards/{boardId}/analytics`):
+```
+{
+  totalCards: number,
+  perColumn: [ { columnId: string, count: number } ],
+  completionRate: number,
+  activityByDay: [ { day: string, count: number } ]
+}
+```
+`completionRate` is in `[0.0, 1.0]`; `day` is a UTC calendar day (ISO 8601 date string).
+
+**Guest board response** (result of `GET /api/guest/{token}/board`) — no emails, no `version`, no Activity; Users appear only as `{ id, displayName }`:
+```
+{
+  id: string,
+  name: string,
+  description: string,
+  currentUserRole: "guest",
+  columns: [
+    {
+      id: string,
+      name: string,
+      orderIndex: number,
+      cards: [
+        {
+          id: string,
+          title: string,
+          description: string,
+          orderIndex: number,
+          dueDate: string | null,
+          assignee: { id: string, displayName: string } | null
+        }
+      ]
+    }
+  ]
+}
+```
+The Guest Comment list (`GET /api/guest/{token}/cards/{cardId}/comments`) is a flat list, oldest first, of:
+```
+{
+  id: string,
+  parentCommentId: string | null,
+  body: string,
+  author: { id: string, displayName: string },
+  createdAt: string,
+  editedAt: string | null
+}
+```
+
+**Paginated Notification response** (result of `GET /api/notifications`) — cursor-based, newest first, <=50 items:
+```
+{
+  items: [ Notification ],
+  nextCursor: string | null
+}
+```
+`nextCursor` encodes the last item's `(createdAt, id)` position and is `null` when no older page exists.
+
+**Paginated Activity response** (result of `GET /api/boards/{boardId}/activity`) — page-index based, newest first, <=100 items:
+```
+{
+  items: [ ActivityEntry ],
+  page: number,
+  pageSize: number
+}
+```
+
+**Error envelope** (every error response) — `field` is present only for field-scoped validation errors:
+```
+{
+  error: {
+    code: string,
+    message: string,
+    field?: string
+  }
+}
+```
 
 ## Authentication & Authorization
 
@@ -464,9 +708,11 @@ Capability matrix:
 | Read columns/cards/comments | allow | allow | allow |
 | Card create/edit/delete/move/reorder | deny | allow | allow |
 | Comment create/edit/delete (own) | deny | allow | allow |
-| Search / notifications / analytics | deny | allow | allow |
+| Activity / search / notifications / analytics | deny | allow | allow |
 | Column create/edit/reorder/delete | deny | deny | allow |
 | Member & settings & board lifecycle | deny | deny | allow |
+
+The Guest column is read-only and limited to Board, Columns, Cards, and Comments: Guests are denied Activity, search, notifications, and analytics (R8.14), and every write (R11.4).
 
 ### Invitation Link / Guest Access (R11)
 
@@ -501,7 +747,7 @@ Card/Comment updates require the expected `version`; mismatch or missing version
 
 ### Mention Notifications (R6)
 
-Comment creation parses mention tokens, resolves them to board members, and creates exactly one unread Notification per distinct mentioned member (deduped by the unique `(recipient_id, comment_id)` constraint) (R6.1). Mentions of non-members produce no notification (R6.8).
+A Mention is the token `@[<user-uuid>]` inside a Comment body. The mention parser is a pure, side-effect-free function in `comments/service.py` that extracts the distinct, valid UUIDs from the `@[<uuid>]` tokens in the body (so it can be tested without the database). Comment creation runs this parser, resolves the parsed ids to current Board Members, and, in the same transaction as the Comment, creates exactly one unread Notification per distinct mentioned Member (deduped by the unique `(recipient_id, comment_id)` constraint) (R6.1). Mentions of non-members produce no notification, and an invalid or non-member mention never rejects the Comment (R6.8).
 
 ## Correctness Properties
 
@@ -565,7 +811,7 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 ### Property 10: Board permanent delete cascades completely
 
-*For any* Board with arbitrary Columns, Cards, Comments, and Activity_Entries, after a permanent delete none of those descendant records remain.
+*For any* Board with arbitrary Columns, Cards, Comments, Notifications, Board memberships, Invitation_Links, and Activity_Entries, after a permanent delete none of that Board's Columns, Cards, Comments, Notifications, Board memberships, Invitation_Links, or Activity_Entries remain, and the data of every other Board and all Users and Teams is unchanged.
 
 **Validates: Requirements 1.6**
 
@@ -601,9 +847,9 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 ### Property 16: Search result soundness, completeness, content, ordering, and cap
 
-*For any* keyword of 1–100 non-whitespace characters and *any* dataset, every returned Card's Title contains the keyword as a case-insensitive substring and belongs to a Board the requester can access, every accessible matching Card is represented (up to the cap), each result carries its Board and Column, and when more than 100 Cards match the result is the first 100 ordered by `updated_at` descending with Card id descending as tie-break.
+*For any* keyword of 1–100 non-whitespace characters and *any* dataset, the keyword is matched as a literal substring — `%`, `_`, and `\` in the keyword carry no wildcard meaning — so every returned Card's Title contains the keyword as a case-insensitive literal substring and belongs to a Board the requester can access, every accessible matching Card is represented (up to the cap), each result carries its Board and Column, when no Card matches the result is empty, and when more than 100 Cards match the result is the first 100 ordered by `updated_at` descending with Card id descending as tie-break.
 
-**Validates: Requirements 7.1, 7.2, 7.3, 7.6**
+**Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.6**
 
 ### Property 17: Activity entries are recorded faithfully for each tracked event
 
@@ -625,7 +871,7 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 ### Property 20: Optimistic concurrency prevents silent overwrites
 
-*For any* Card or Comment and *any* update request, the update is applied only when the supplied version identifier matches the current version, in which case a new version identifier distinct from every prior version of that resource is assigned; an update with a missing version or a non-matching version is rejected with a conflict error and the resource is unchanged.
+*For any* Card or Comment edit (PATCH) — the only operations that require a version — the update is applied only when the supplied version identifier matches the current version, in which case the edit is applied and a new version identifier distinct from every prior version of that resource is assigned; an edit with a missing version or a non-matching version is rejected with a conflict error and the resource is unchanged.
 
 **Validates: Requirements 13.2, 13.3, 13.5, 14.5**
 
@@ -633,7 +879,7 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 *For any* authenticated User whose role is read from stored `BoardMembership`, *any* Board role (anonymous Guest via an active Invitation_Link, Member, Admin, or no role), and *any* operation, the authorization decision permits the operation if and only if the role's capability set includes it; denied write operations leave the referenced resource unchanged, and a User with no role and no active Invitation_Link on the Board is denied.
 
-**Validates: Requirements 1.7, 2.8, 3.6, 4.6, 5.5, 5.6, 8.14, 10.7, 11.4, 11.7, 12.1, 12.2, 12.3, 12.4, 12.5**
+**Validates: Requirements 1.7, 2.8, 3.6, 4.6, 5.6, 8.14, 10.7, 11.4, 11.7, 12.1, 12.2, 12.3, 12.4, 12.5**
 
 ### Property 22: Authentication gate precedes authorization
 
@@ -653,15 +899,15 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 **Validates: Requirements 10.2, 10.3**
 
-### Property 25: Invitation link generation, isolation, and access control
+### Property 25: Invitation link generation, isolation, and anonymous Guest access control
 
-*For any* set of Invitation_Links on a Board, a newly generated link is active, uniquely identifiable, and bound to that Board; revoking one link sets only that link to inactive and leaves all others unchanged; access via an active link grants read-only Board access while rejecting writes; and access via an inactive link is rejected.
+*For any* set of Invitation_Links on a Board, Guest access is anonymous through `/api/guest/{token}/...`: an active token bound to a non-archived Board grants read-only access, any other HTTP method on a Guest route is rejected with an authorization error, and an unknown, inactive, revoked, or archived-Board token is rejected. Generating a link yields an active, uniquely identifiable link bound to exactly that Board, and revoking one link sets only that link to inactive and leaves all others unchanged.
 
-**Validates: Requirements 11.1, 11.2, 11.3, 11.5**
+**Validates: Requirements 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8**
 
-### Property 26: Passwords are stored hashed and verifiable
+### Property 26: Passwords are stored as a verifiable argon2 hash
 
-*For any* valid registration, the stored credential is not the plaintext password and the password verifies against the stored hash.
+*For any* valid registration, the stored credential is an argon2 hash, is not the plaintext password, and the password verifies against the stored hash.
 
 **Validates: Requirements 15.1**
 
@@ -671,23 +917,77 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 **Validates: Requirements 15.3**
 
-### Property 28: Registration validation enforces email format and password length
+### Property 28: Registration validation enforces email format, password length, uniqueness, and display name
 
-*For any* registration request, the account is created only when the email is in valid format and the password has at least 8 characters; otherwise the request is rejected with a validation error and no account is created.
+*For any* registration request, the account is created only when the email is in valid format and not already registered, the password has at least 8 characters, and the display name is 1 to 50 characters after trimming; otherwise the request is rejected with a validation error and no account is created.
 
-**Validates: Requirements 15.14, 15.16**
+**Validates: Requirements 15.14, 15.15, 15.16**
 
 ### Property 29: Refresh-token exchange and revocation
 
-*For any* refresh token, exchanging a valid, non-revoked, non-expired refresh token yields a new identity-only access token (no role claims) and sets it in the access cookie; a revoked, expired, or unknown refresh token yields an authentication error and no access token is issued.
+*For any* refresh token, exchanging a valid, non-revoked, non-expired refresh token yields a new identity-only access token (no role claims) and sets it in the access cookie; a revoked, expired, or unknown refresh token yields an authentication error and no access token is issued; and a logged-out refresh token is revoked so it can no longer mint an access token.
 
-**Validates: Requirements 15.11, 15.12, 15.13**
+**Validates: Requirements 15.8, 15.11, 15.12, 15.13**
 
 ### Property 30: Account lockout after three consecutive failed logins
 
 *For any* account and *any* sequence of login attempts, after three consecutive failed login attempts the account is locked for 15 minutes during which every login attempt (including one with correct credentials) is rejected with a generic authentication error and no tokens are issued; a successful login before the third failure, or the elapse of the 15-minute window, resets the consecutive-failure count so the account accepts logins again.
 
 **Validates: Requirements 15.4, 15.5, 15.6, 15.7**
+
+### Property 31: Team creation, listing, membership, and access control
+
+*For any* Team creation, a Team is created only when the Team name is 1 to 100 characters after trimming, the creator becomes a Team_Member with the Team_Role `team_admin`, and an invalid Team name is rejected with a validation error and no Team created; a Team list returned to a caller contains only Teams the caller is a Team_Member of; a member list returned to a Team_Member is complete, giving each member's `userId`, `displayName`, and `teamRole`; and a non-member requesting a Team's members is denied with an authorization error.
+
+**Validates: Requirements 16.1, 16.2, 16.3, 16.4, 16.5**
+
+### Property 32: Board creation grants the creator Admin effective immediately
+
+*For any* Board creation, the request succeeds only when the requester is a Team_Member of the target Team, and on success the creator is granted the Admin role on the new Board and can act as Admin on the creator's very next request without logging in again.
+
+**Validates: Requirements 1.1, 1.11, 1.12**
+
+### Property 33: Board invitations require an eligible, not-already-member Team_Member
+
+*For any* Board member invitation, the invitation succeeds only when the invited User is a Team_Member of the Board's Team and is not already a Board member; otherwise the request is rejected with a validation error and Board membership is unchanged.
+
+**Validates: Requirements 10.1, 10.5, 10.8**
+
+### Property 34: Team_Join_Link lifecycle and access control
+
+*For any* Team_Join_Link, accepting an active, unexpired link makes the accepting authenticated User a Team_Regular of the bound Team; an unknown, inactive, or expired token, and a User who is already a Team_Member, are rejected with Team membership unchanged; revoking one link sets only that link to inactive and leaves all others unchanged; only a Team_Admin can generate, revoke, or list links; and an unauthenticated accept is rejected.
+
+**Validates: Requirements 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7**
+
+### Property 35: Card move changes only the moved Card's updated_at and never its version
+
+*For any* successful Card move or reorder, the moved Card's `updated_at` advances to the time of the operation, no Card's `version` changes, and the `updated_at` of every other Card is unchanged, including Cards whose order indices were shifted by reindexing.
+
+**Validates: Requirements 4.7, 13.6**
+
+### Property 36: Activity is readable only by Members and Admins
+
+*For any* request to read a Board's activity history, the request is permitted only when the caller holds the Member or Admin role on that Board; Guests and Users with no role on the Board are rejected with an authorization error and no Activity_Entries are returned.
+
+**Validates: Requirements 8.14**
+
+### Property 37: Board list reflects the caller's Board roles and the archived filter
+
+*For any* Board list request, the result contains only Boards on which the caller holds a Board role, limited to active Boards by default; when the archived filter is supplied the result contains only archived Boards on which the caller holds the Admin role.
+
+**Validates: Requirements 1.13**
+
+### Property 38: Visibility does not change who can access a Board
+
+*For any* Board, the set of Users and Guests allowed to access it is the same regardless of which visibility value (`private` or `team`) is stored.
+
+**Validates: Requirements 1.14**
+
+### Property 39: Only the author can edit or delete a Comment
+
+*For any* Comment and *any* edit or delete request, the request succeeds only when the requester is the Comment's author; any other User is rejected with an authorization error and the Comment is unchanged.
+
+**Validates: Requirements 5.5**
 
 ## Error Handling
 
@@ -754,7 +1054,7 @@ The feature is a stateful web application with substantial pure logic (ordering/
 - **Traceability tag:** each property test includes a comment tagging it to the design property, in the format:
   `# Feature: task-management-app, Property {number}: {property_text}`
 
-Each of the 30 correctness properties is implemented by a single backend property-based test. Generators model the relevant domain objects (boards, columns with cards, comment trees, mention multisets, notification sets with timestamps, membership/role sets, version sequences) and include edge cases (empty collections, whitespace-only strings, non-ASCII, boundary lengths, duplicate mentions, equal timestamps for tie-break coverage).
+Each of the 39 correctness properties is implemented by a single backend property-based test. Generators model the relevant domain objects (boards, columns with cards, comment trees, mention multisets, notification sets with timestamps, membership/role sets, version sequences) and include edge cases (empty collections, whitespace-only strings, non-ASCII, boundary lengths, duplicate mentions, equal timestamps for tie-break coverage). Properties 31 to 34, 37, and 38 (Teams, Board creation, Board invitations, Team_Join_Link lifecycle, Board listing, and visibility) run against the transactional test database with small generators.
 
 ### Example and Integration Coverage Notes
 

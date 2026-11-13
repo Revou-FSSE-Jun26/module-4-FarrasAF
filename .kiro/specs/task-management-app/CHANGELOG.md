@@ -2,6 +2,66 @@
 
 All notable changes to the task-management-app spec are documented here. Versions are ordered newest-first. The version is bumped each time a spec document (requirements.md, design.md, or tasks.md) is changed.
 
+## v15 - 2026-11-13 - Activity pagination, link schemas, and link-row references refined
+
+### Changes
+Design-only revision (design.md). Correctness Properties, requirements.md, tasks.md, and the steering files were not modified. No property or endpoint row was renumbered.
+
+- **Activity_Service:** stated that the `page` query parameter is zero-based (page `0` is the newest page) and that a non-integer `page` returns a `ValidationError`; made explicit that the response shape is `{ items, page, pageSize }` with no `hasMore` or `totalPages`.
+- **API Response Schemas — InvitationLink:** reduced to `{ id, boardId, token, status, createdAt }` (removed `createdById` and `updatedAt`).
+- **API Response Schemas — TeamJoinLink:** set to `{ id, teamId, token, status, expiresAt, createdAt, isExpired }`, where `isExpired` is derived on the server at read time (`expiresAt` is in the past) and is never stored (removed `createdById` and `updatedAt`; added `teamId` and `isExpired`).
+- **Endpoint tables:** the link rows in Access_Control_Service (invitation create/list/revoke) and Team_Service (join-link create/list/revoke) now reference the InvitationLink / TeamJoinLink schemas instead of listing fields inline; the R11.9 and R17.9 tags are preserved.
+
+### Reason
+Align the link response shapes with the finalized DECISIONS (server-derived `isExpired` on Team_Join_Links computed from `expiresAt` at read time per DECISION 20; trimmed link payloads) and remove the field-list duplication between the endpoint tables and the API Response Schemas subsection, while pinning the Activity pagination contract (zero-based page, non-integer page is a validation error, fixed `{ items, page, pageSize }` shape).
+
+### Impact
+- Affected requirements: none (no requirement text changed; refines the response contract for R8.12/R8.15, R11.1/R11.2/R11.9, R17.1/R17.2/R17.9 and DECISION 20).
+- Affected design components: Activity_Service endpoint description, API Response Schemas (InvitationLink, TeamJoinLink), and the link rows in the Access_Control_Service and Team_Service endpoint tables.
+- Affected implementation tasks: none (tasks.md not created).
+
+## v14 - 2026-11-13 - API Response Schemas added to API Design
+
+### Changes
+Design-only revision (design.md), limited to adding a new "API Response Schemas" subsection at the end of the API Design section. No other section was changed; requirements.md, tasks.md, and the steering files were not modified, and no property or endpoint row was renumbered.
+
+- **Added API Response Schemas subsection** documenting the camelCase response shape for each returned resource: User (identity), Team, TeamMember, TeamJoinLink, TeamJoinLinkPreview, Board (with `teamId` and `currentUserRole`), BoardMember, Column, Card, Comment (flat, with `parentCommentId`), Notification, ActivityEntry, InvitationLink, the analytics response, the Guest board response and Guest comment list, the paginated Notification and Activity responses, and the error envelope.
+- Each shape lists camelCase fields with types: UUIDs as strings, timestamps as ISO 8601 UTC strings, nullable fields as `type | null`, and enums with their exact stored values (team roles `team_admin`/`team_regular`; Board roles `admin`/`member`, plus `guest` only in responses; Board status `active`/`archived`; link status `active`/`inactive`; visibility `private`/`team`; Notification status `unread`/`read`; Activity event types). Only keys are camelCased, never values.
+- Only fields present in Data Models are used, plus `currentUserRole` and `currentUserTeamRole`. No shape exposes `passwordHash`; `token` appears only on `TeamJoinLink` and `InvitationLink` (the link-issuing endpoints); Guest responses expose Users only as `{ id, displayName }` and never include emails, `version`, or Activity.
+
+### Reason
+The API Design section described endpoint behavior and conventions but had no single place defining the exact camelCase response shapes clients and the frontend `types/api.ts` must mirror. The new subsection makes the response contract explicit and traceable to the Data Models and the finalized DECISIONS.
+
+### Impact
+- Affected requirements: none (no requirement text changed; the schemas restate the response contract already implied by R1, R6, R8, R9, R10, R11, R15, R16, R17 and the API conventions).
+- Affected design components: API Design (new "API Response Schemas" subsection only). No change to Data Models, Error Handling, Correctness Properties, or any other section.
+- Affected implementation tasks: none (tasks.md not created).
+
+## v13 - 2026-11-13 - Correctness Properties expanded to 39
+
+### Changes
+Design-only revision (design.md), limited to the Correctness Properties section and the one Testing Strategy sentence that counts properties. requirements.md, tasks.md, and the steering files were not modified. No property was renumbered.
+
+- **Rewrote existing properties (numbers and format preserved):**
+  - Property 10: cascade now enumerates Columns, Cards, Comments, Notifications, Board memberships, Invitation_Links, and Activity_Entries, and asserts other Boards and all Users and Teams are unchanged (R1.6).
+  - Property 16: keyword matched as a literal substring (`%`, `_`, `\` carry no wildcard meaning) and no match yields an empty result; Validates line now R7.1, 7.2, 7.3, 7.4, 7.6.
+  - Property 20: scoped to Card and Comment edits (PATCH) as the only version-requiring operations; missing/non-matching version rejected with the resource unchanged, matching version assigns a distinct new version (R13.2, 13.3, 13.5, 14.5).
+  - Property 21: removed R5.5 from its Validates line (moved to Property 39); property text unchanged.
+  - Property 25: reframed around anonymous Guest access via `/api/guest/{token}/...`, non-GET rejection, and unknown/inactive/revoked/archived-Board rejection, plus generation and revocation isolation; Validates R11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8.
+  - Property 26: stored credential is an argon2 hash (R15.1).
+  - Property 28: added email uniqueness and displayName 1–50 after trimming; Validates R15.14, 15.15, 15.16.
+  - Property 29: added the logout-revocation clause; Validates R15.8, 15.11, 15.12, 15.13.
+- **Added Properties 31–39 (same format):** Teams (31, R16.1–16.5), Board creation with immediate Admin (32, R1.1, 1.11, 1.12), Board invitations (33, R10.1, 10.5, 10.8), Team_Join_Link lifecycle (34, R17.1–17.7), Card move updated_at/version (35, R4.7, 13.6), Activity access (36, R8.14), Board list (37, R1.13), visibility (38, R1.14), Comment ownership (39, R5.5).
+- **Testing Strategy:** property count updated from 30 to 39, with a note that Properties 31–34, 37, and 38 run against the transactional test database with small generators.
+
+### Reason
+The Correctness Properties section had not yet captured the Teams, Board-creation, Board-invitation, Team_Join_Link, Card-move, Activity-access, Board-list, visibility, and Comment-ownership behaviors already specified in requirements.md and the design body, and several existing properties needed to match the finalized DECISIONS (literal-substring search, version only on Card/Comment PATCH, anonymous Guest endpoints, argon2 hashing, registration validation, logout revocation).
+
+### Impact
+- Affected requirements: coverage added/clarified for R1.6, R1.13, R1.14, R4.7, R5.5, R7.4, R8.14, R10.1, R10.5, R10.8, R11.4, R11.6, R11.8, R13.6, R15.1, R15.8, R15.15, R16.1–16.5, R17.1–17.7 (no requirement text changed).
+- Affected design components: Correctness Properties (Properties 10, 16, 20, 21, 25, 26, 28, 29 rewritten; 31–39 added) and the Testing Strategy property-count sentence.
+- Affected implementation tasks: none (tasks.md not created).
+
 ## v12 - 2026-11-13 - Design aligned to identity-only cookie auth, Teams, Guest endpoints, and API conventions
 
 ### Changes
