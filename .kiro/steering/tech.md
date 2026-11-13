@@ -12,7 +12,7 @@ tooling, and technical rules that apply to all work.
 - **Frontend**: Next.js (App Router), React, TypeScript, Tailwind CSS
 - **Drag-and-drop**: `@dnd-kit/core` and `@dnd-kit/sortable`
 - **Backend**: Python 3.14, Flask (application factory + blueprints), REST JSON API
-- **Backend libraries**: Flask-SQLAlchemy, Flask-Migrate, PyJWT, `psycopg[binary]` (PostgreSQL driver), `python-dotenv`, `gunicorn`, `argon2-cffi`
+- **Backend libraries**: Flask-SQLAlchemy, Flask-Migrate, PyJWT, `psycopg[binary]` (PostgreSQL driver), `python-dotenv`, `gunicorn`, `argon2-cffi`, `marshmallow`
 - **Database**: PostgreSQL (local install for development, Supabase-hosted
   Postgres in production; no Docker), SQLAlchemy ORM, Alembic migrations
 - **Auth**: JWT access tokens (15 minutes) + hashed, revocable refresh tokens (7 days), both delivered as `HttpOnly` cookies. Passwords hashed with argon2 (`argon2-cffi`).
@@ -75,8 +75,9 @@ npx playwright test
   the database.
 - **Concurrency**: Card and Comment updates require a `version` and use
   conditional `UPDATE ... WHERE version = :expected`.
-- **Validation**: validate on the server always; trim before length checks.
-  Frontend validation is for UX only.
+- **Validation**: validate on the server always, with Marshmallow schemas for
+  request shape and format and service-level checks for rules that need the
+  database. Trim before length checks. Frontend validation is for UX only.
 - **JSON naming**: API JSON uses camelCase; database columns and Python
   code use snake_case. Conversion happens in one serialization helper in
   `backend/flask_app/common/`; services and routes never rename fields by

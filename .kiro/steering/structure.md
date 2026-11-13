@@ -13,7 +13,7 @@ Specs and steering live in `.kiro/`. Architecture details are in
 task-management-app/
 ├── .kiro/
 │   ├── specs/task-management-app/   # requirements.md, design.md, tasks.md
-│   └── steering/                    # product, tech, structure, frontend, card-conventions
+│   └── steering/                    # product, tech, structure, frontend, backend, database, card-conventions
 ├── backend/                         # Flask API
 ├── frontend/                        # Next.js app (+ Playwright E2E)
 ├── README.md
@@ -29,9 +29,12 @@ backend/
 │   ├── extensions.py         # SQLAlchemy db, migrate
 │   ├── config.py             # settings from env (DATABASE_URL, JWT_SECRET_KEY, COOKIE_SECURE, ...)
 │   ├── models/               # one file per entity; __init__.py imports all models so Alembic sees them
-│   ├── auth/                 # Authentication_Service (login, refresh, logout, auth cookies)
-│   ├── access/               # Access_Control_Service (membership, invitations); rbac.py holds the
-│   │                         # require_role decorator and the pure role-decision function
+│   │   └── base.py           # BaseModel (id, created_at, updated_at, deleted_at)
+│   ├── auth/                 # Authentication_Service (login, refresh, logout, auth cookies);
+│   │                         # holds the @token_required decorator
+│   ├── access/               # Access_Control_Service (Board membership, Invitation_Links, Guest routes
+│   │                         # under /api/guest/*); rbac.py holds @require_role and the pure role-decision function
+│   ├── teams/                # Team_Service (Teams, Team memberships, Team_Join_Links)
 │   ├── boards/               # Board_Service
 │   ├── columns/              # Column_Service
 │   ├── cards/                # Card_Service
@@ -40,8 +43,10 @@ backend/
 │   ├── search/               # Search_Service
 │   ├── activity/             # Activity_Service
 │   ├── analytics/            # Analytics_Service
-│   └── common/               # exceptions.py, validation.py, ordering.py (reindex), cursor.py,
-│                             # serialization.py (snake_case <-> camelCase), health.py (GET /api/health)
+│   └── common/               # exceptions.py, validation.py (BaseSchema, TrimmedStr, NonBlankStr, load_schema),
+│                             # serialization.py (read_json, read_query, json_response),
+│                             # ordering.py (reindex), cursor.py, pagination.py (page size constants),
+│                             # time.py (utc_now), health.py
 ├── migrations/               # Alembic (never hand-edit applied migrations)
 ├── scripts/
 │   ├── __init__.py
@@ -60,12 +65,13 @@ backend/
 Each service package (`cards/`, `boards/`, ...) contains:
 - `routes.py`: Flask blueprint; thin handlers only
 - `service.py`: business logic (`*_service` functions)
-- `__init__.py`: exports the blueprint
+- `__init__.py`: exports the Blueprint(s)
+- `schema.py`: Marshmallow input schemas (request bodies and query strings)
 
 Cross-module calls go through service functions, never through another
 module's routes. Models live only in `models/`.
 
-Exceptions to the convention: `common/health.py` (public `GET /api/health`, no auth, never touches the database) and `access/rbac.py`.
+Exceptions to the convention: `common/health.py` (public `GET /api/health`, no auth, never touches the database) and `access/rbac.py` have no routes of their own to structure this way. A module has no `schema.py` when none of its routes take a request body or query string (for example `analytics/` and the Guest routes in `access/`). `access/` may define two Blueprints: `access_bp` (members and invitations) and `guest_bp` (Guest routes).
 
 ## Frontend (`frontend/`)
 ```
@@ -74,13 +80,16 @@ frontend/
 │   ├── app/                      # Next.js App Router (page.tsx per route)
 │   │   ├── login/
 │   │   ├── register/
+│   │   ├── teams/                # Team list and creation
+│   │   │   └── [teamId]/         # members and join links
+│   │   ├── join/[token]/         # accept a Team_Join_Link (login required)
 │   │   ├── boards/
 │   │   │   └── [boardId]/        # board view, activity/, analytics/, settings/
-│   │   ├── invite/[token]/       # guest view
+│   │   ├── invite/[token]/       # anonymous Guest view (calls /api/guest/...)
 │   │   └── search/
 │   ├── components/
 │   │   ├── shared/               # Base* primitives (BaseButton, BaseModal, ...)
-│   │   └── <feature>/            # board/, card/, comment/, notification/, ...
+│   │   └── <feature>/            # board/, card/, comment/, notification/, team/, ...
 │   ├── hooks/                    # useXxx.ts custom hooks
 │   ├── lib/                      # apiClient.ts (same origin /api calls, cookie-based auth), pure utilities
 │   └── types/
@@ -102,7 +111,7 @@ frontend/
 - Import with the `@/` alias (maps to `src/`), e.g. `import { Card } from '@/types/api'`.
 
 ## Where New Code Goes
-- New endpoint: `routes.py` + `service.py` in the matching backend module
+- New endpoint: `routes.py` + `schema.py` (if it takes a body or query string) + `service.py` in the matching backend module
 - New table: `backend/flask_app/models/` + a new Alembic migration
 - New shared validation or helper: `backend/flask_app/common/`
 - New page: folder with `page.tsx` under `frontend/src/app/`
@@ -113,10 +122,12 @@ frontend/
 - New E2E test: `frontend/e2e/<flow>.spec.ts`
 - New JSON field name conversion: only in `backend/flask_app/common/serialization.py`
 - New RBAC rule: `backend/flask_app/access/rbac.py`
-- New public (no-auth) endpoint: only `common/health.py` and the auth routes; ask before adding others
+- New public (no-auth) endpoint: only `common/health.py`, the auth routes (`register`, `login`, `refresh`, `logout`), and `/api/guest/*`; ask before adding others
+- New Team feature: `backend/flask_app/teams/`
+- New Guest endpoint: `backend/flask_app/access/` (GET only, see `backend.md` rule 3)
 
 ## Naming
-- Backend follows `card-conventions.md` (snake_case; tables plural_snake_case)
+- Backend follows `card-conventions.md`, `backend.md`, and `database.md` (snake_case; tables plural_snake_case)
 - Frontend follows `frontend.md`
 - Test files: backend `test_<module>.py`; property tests
   `test_property_<n>_<short_name>.py`; E2E `<flow>.spec.ts`

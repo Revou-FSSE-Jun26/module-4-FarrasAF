@@ -56,7 +56,7 @@ fileMatchPattern: "frontend/**/*.{ts,tsx}"
 **Example:** `const data: unknown = await res.json();` then narrow it, instead of `const data: any = await res.json();`
 
 ### 10. API types come from one place
-**Rule:** All API request and response types live in `src/types/api.ts` and mirror the data models and endpoints in `design.md`. Import them with `@/types/api`; never redefine them inline in components or hooks. If `src/types/api.ts` does not yet contain a needed type, add it there first. All fields are camelCase, matching the JSON API (e.g. `orderIndex`, `createdAt`, `assigneeId`); never use snake_case in frontend code.
+**Rule:** All API request and response types live in `src/types/api.ts` and mirror the data models and endpoints in `design.md`. Import them with `@/types/api`; never redefine them inline in components or hooks. If `src/types/api.ts` does not yet contain a needed type, add it there first. All fields are camelCase, matching the JSON API (e.g. `orderIndex`, `createdAt`, `assigneeId`); never use snake_case in frontend code. All `id` fields are UUID strings (`string`), never numbers.
 **Rationale:** A single source of truth keeps the frontend aligned with the backend contract and gives generated code real types to use instead of falling back to `any`.
 **Example:** `import type { Card, Column } from '@/types/api';`
 

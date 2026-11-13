@@ -1,217 +1,261 @@
 ---
-inclusion: manual
+inclusion: fileMatch
+fileMatchPattern: ["backend/flask_app/models/**/*.py", "backend/migrations/**/*.py"]
 ---
 
-# Database Guidelines (PostgreSQL)
+# Database Conventions (SQLAlchemy + PostgreSQL)
 
-This document defines database modeling conventions and implementation rules for all database models using PostgreSQL and SQLAlchemy.
+Entities, fields, and indexes are defined in the Data Models section of
+`design.md`. This file defines how they are written.
 
-All models must follow these guidelines to maintain consistency, readability, and predictable database behavior across the application.
+## 1. Naming
+**Rule:** Tables are plural snake_case; columns are snake_case; models are
+PascalCase and singular; foreign keys are `<entity>_id`; membership and join
+tables are plural (`team_memberships`). Constraints and indexes get
+deterministic names from a `naming_convention` set on the metadata in
+`extensions.py`.
+**Rationale:** Predictable names, and stable Alembic migrations.
+**Example:** model `BoardMembership`, table `board_memberships`, column `board_id`.
 
-## 1. Naming Conventions
-
-### Rule
-- Model table names must use plural nouns in `snake_case`.
-- Column names must use singular nouns in `snake_case`.
-- SQLAlchemy models must explicitly define their table name using `__tablename__`.
-- Avoid abbreviations unless they are widely recognized and unambiguous.
-
-### Rationale
-Consistent naming conventions make database schemas easier to understand, navigate, and maintain. Using plural table names represents collections of records, while singular column names describe individual attributes.
-
-### Example
-
+## 2. Base columns
+**Rule:** Every model inherits `BaseModel` from `models/base.py`, which
+defines exactly these four columns. Never redefine them in a model, except
+the Card `updated_at` exception in rule 3.
+**Rationale:** One consistent shape for every table.
+**Example:**
 ```python
-class CardEntity(db.Model):
-    __tablename__ = "cards"
-
-    column_id = db.Column(db.UUID, nullable=False)
-    card_title = db.Column(db.String(255), nullable=False)
+class BaseModel(db.Model):
+    __abstract__ = True
+    id = db.Column(db.Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False,
+                           default=utc_now, onupdate=utc_now)
+    deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 ```
 
-## 2. Required Columns
+## 3. Timestamps
+**Rule:** All timestamps are timezone-aware UTC, produced by `utc_now()` in
+`flask_app/common/time.py` (`datetime.now(timezone.utc)`). Never use
+`datetime.utcnow()` or naive datetimes. Exception: `Card` defines its own
+`updated_at` with `default=utc_now` and NO `onupdate`; `Card_Service` sets it
+explicitly: on creation `created_at` and `updated_at` share one value (R3.1),
+on edit and on move only that Card's `updated_at` is set (R3.3, R4.7), and
+reindexing other Cards never changes their `updated_at`.
+**Rationale:** `onupdate` would bump the `updated_at` of every Card shifted by
+reindexing, which breaks R4.7 and the search ordering in R7.6.
+**Example:** `card.updated_at = now` where `now = utc_now()` is also used for
+`card.created_at` on creation.
 
-### Rule
-Every model must define the following four standard columns:
+## 4. Data types
+**Rule:** Use these types:
+- Short strings (names, titles, email, display name): `db.String(255)`
+- Long text (descriptions, comment bodies): `db.Text`
+- Card and Column order index: `db.Integer`
+- Hashed passwords (and other hashes): `db.String(255)`
+- `version`: `db.Integer`, not null, default 1
+- Enum-like values (roles, status, event type): `db.String(50)` plus a
+  `CheckConstraint` listing the allowed values
+- Foreign keys to a `BaseModel` table: `db.Uuid`
+Length limits from the requirements (for example Board name 100, Card Title
+255, Comment 5000) are enforced in the service layer, not by column length.
+**Rationale:** Simple portable types; business limits live in one place.
+**Example:** `name = db.Column(db.String(255), nullable=False)`
 
-| Column | Data Type | Constraint / Default |
-|---|---|---|
-| `id` | `db.UUID` | Primary key, default `uuid.uuid4` |
-| `created_at` | `db.DateTime` | Non-nullable, default current UTC time |
-| `updated_at` | `db.DateTime` | Non-nullable, default current UTC time, updated automatically |
-| `deleted_at` | `db.DateTime` | Nullable, default `None` |
-
-Additional requirements:
-- UUIDs must be generated using Python's `uuid.uuid4`.
-- Timestamp values must use UTC.
-- `created_at` must represent when the record was initially created.
-- `updated_at` must be updated whenever the record changes.
-- `deleted_at` must be used to support soft deletion instead of immediately removing records.
-
-### Rationale
-Standardized metadata columns provide consistent record identification, auditing, and lifecycle management across all entities.
-
-Using soft deletion preserves historical records and allows recovery or auditing when necessary.
-
-### Example
-
+## 5. Relationships
+**Rule:** Define every relationship on both sides with `db.relationship()`,
+linked by `back_populates`, and always set `lazy` explicitly. Use
+`lazy="select"` for single parents, `lazy="selectin"` for collections that
+list endpoints load (to avoid N+1), and never `lazy="dynamic"`. Set
+`cascade="all, delete-orphan"` and `passive_deletes=True` on the parent side
+of cascading collections.
+**Rationale:** Both sides stay visible to `mypy`, and loading behavior is
+explicit.
+**Example:**
 ```python
-import uuid
-from datetime import datetime, timezone
+class Board(BaseModel):
+    columns = db.relationship("Column", back_populates="board", lazy="selectin",
+                              cascade="all, delete-orphan", passive_deletes=True,
+                              order_by="Column.order_index")
 
-class CardEntity(db.Model):
-    __tablename__ = "cards"
-
-    id = db.Column(
-        db.UUID,
-        primary_key=True,
-        default=uuid.uuid4
-    )
-
-    created_at = db.Column(
-        db.DateTime(timezone=True),
-        nullable=False,
-        default=lambda: datetime.now(timezone.utc)
-    )
-
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc)
-    )
-
-    deleted_at = db.Column(
-        db.DateTime(timezone=True),
-        nullable=True,
-        default=None
-    )
+class Column(BaseModel):
+    board_id = db.Column(db.Uuid, db.ForeignKey("boards.id", ondelete="CASCADE"),
+                         nullable=False, index=True)
+    board = db.relationship("Board", back_populates="columns", lazy="select")
 ```
 
-## 3. Data Types
-
-### Rule
-Use the following standardized SQLAlchemy data types:
-
-| Field | Data Type |
-|---|---|
-| `title` | `db.String(255)` |
-| `description` | `db.Text` |
-| `position` | `db.Integer` |
-| Password fields | `db.String(255)` |
-
-Additional requirements:
-- Use `db.String(length)` for character fields with a defined maximum length.
-- Use `db.Text` for long-form text without a predefined character limit.
-- Use `db.Integer` for whole-number values.
-- Password fields must store hashed passwords, never plaintext passwords.
-- Select other data types based on the actual nature and constraints of the data.
-
-### Rationale
-Standardized data types improve schema consistency, prevent unnecessary storage constraints, and make the intended use of each column clear.
-
-Password hashing is mandatory to prevent storing sensitive credentials in plaintext.
-
-### Example
-
+## 6. Constraints, ordering, and cascades
+**Rule:**
+- Primary keys are UUID v4. Ordering and tie-breaks by `id` only need to be
+  deterministic, not chronological.
+- Uniqueness of order positions, `(board_id, order_index)` for Columns and
+  `(column_id, order_index)` for Cards, is `DEFERRABLE INITIALLY DEFERRED`,
+  so a reindex inside one transaction does not violate it mid-statement.
+- Cascades follow `design.md`: deleting a Board cascades to its Columns, Cards,
+  Comments, Notifications, memberships, Invitation_Links, and Activity_Entries,
+  declared with `ondelete="CASCADE"`. Other foreign keys keep the default
+  (restrict).
+- `ActivityEntry.resource_id` is not a foreign key, because its target may
+  already be deleted.
+- Add an index on every foreign key used for filtering, plus the indexes
+  listed in `design.md`.
+**Rationale:** Prevents reindex failures and leftover rows after deletes (R1.6).
+**Example:**
 ```python
-class UserEntity(db.Model):
-    __tablename__ = "users"
-
-    title = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    position = db.Column(db.Integer, nullable=False)
-
-    password = db.Column(db.String(255), nullable=False)
+db.UniqueConstraint("column_id", "order_index", deferrable=True, initially="DEFERRED")
 ```
 
-## 4. Relationships
+## 7. Deletion
+**Rule:** All deletions in the requirements are hard deletes (R1.6, R2.5,
+R3.5, R5.4). `deleted_at` exists on every table by project convention but is
+unused in V1: it stays NULL, and no query filters on it. Do not implement soft
+delete, trash, or restore.
+**Rationale:** Soft delete would break permanent deletion and the unique
+constraints on ordering, email, and membership.
+**Example:** `db.session.delete(card)`, not `card.deleted_at = utc_now()`.
 
-### Rule
-- Define relationships on both sides of the relationship whenever applicable.
-- Use `db.relationship()` to declare ORM relationships.
-- Explicitly define the relationship's `backref` and `lazy` loading strategy.
-- Foreign key columns must reference the correct target table and column.
-- Relationship names must clearly describe the related entity.
-- Avoid creating relationships without a corresponding foreign key unless there is a specific architectural reason.
+## 8. Migrations
+**Rule:** Generate with `flask --app flask_app.app db migrate -m "<message>"`,
+then review the file by hand before applying: autogenerate can miss
+`CheckConstraint` and deferrable constraints. One logical change per migration,
+every migration has a working `downgrade`, and applied migrations are never
+edited. Models contain no business logic.
+**Rationale:** Reviewed, reversible, reproducible schema changes.
+**Example:** a new column means a new migration, not an edit to an old one.
 
-### Rationale
-Explicitly defined relationships make entity associations easier to understand and maintain.
-
-Defining both sides ensures that related records can be accessed consistently from either entity. Explicit loading strategies also make database access behavior more predictable.
-
-### Example
-
-```python
-class BoardColumnEntity(db.Model):
-    __tablename__ = "board_columns"
-
-    id = db.Column(
-        db.UUID,
-        primary_key=True,
-        default=uuid.uuid4
-    )
-
-    cards = db.relationship(
-        "CardEntity",
-        backref=db.backref(
-            "board_column",
-            lazy="select"
-        ),
-        lazy="select"
-    )
-
-
-class CardEntity(db.Model):
-    __tablename__ = "cards"
-
-    id = db.Column(
-        db.UUID,
-        primary_key=True,
-        default=uuid.uuid4
-    )
-
-    board_column_id = db.Column(
-        db.UUID,
-        db.ForeignKey("board_columns.id"),
-        nullable=False
-    )
-```
-
-**Note:** The example uses `backref` to automatically create the reverse relationship. Do not define a second explicit relationship for the same association when using this approach. If using `back_populates` instead, define it explicitly on both sides.
-
+## 9. Identifiers in code
+**Rule:** IDs are UUIDs. Use `<uuid:...>` route converters so a malformed ID
+returns 404 instead of a server error, and serialize IDs as strings. Timestamps
+are serialized as ISO 8601 UTC with `Z` by `common/serialization.py`.
+**Rationale:** Flask's default JSON provider formats datetimes in a non-ISO
+style, which would mismatch the frontend types.
+**Example:** `@cards_bp.post('/api/columns/<uuid:column_id>/cards')`---
+inclusion: fileMatch
+fileMatchPattern: ["backend/flask_app/models/**/*.py", "backend/migrations/**/*.py"]
 ---
 
-## 5. General Guidelines
+# Database Conventions (SQLAlchemy + PostgreSQL)
 
-### Rule
-- Every model must follow the conventions defined in this document.
-- Use explicit column constraints such as `nullable`, `unique`, and `index` when required by the business rules.
-- Define foreign key constraints for relational references.
-- Avoid duplicating data across tables unless there is a clear architectural justification.
-- Ensure that database changes are managed through migrations.
-- Do not modify the database schema manually outside the migration workflow.
+Entities, fields, and indexes are defined in the Data Models section of
+`design.md`. This file defines how they are written.
 
-### Rationale
-Consistent schema definitions and migration practices reduce unexpected database behavior, prevent schema drift, and make changes easier to review and deploy.
+## 1. Naming
+**Rule:** Tables are plural snake_case; columns are snake_case; models are
+PascalCase and singular; foreign keys are `<entity>_id`; membership and join
+tables are plural (`team_memberships`). Constraints and indexes get
+deterministic names from a `naming_convention` set on the metadata in
+`extensions.py`.
+**Rationale:** Predictable names, and stable Alembic migrations.
+**Example:** model `BoardMembership`, table `board_memberships`, column `board_id`.
 
-### Example
-
+## 2. Base columns
+**Rule:** Every model inherits `BaseModel` from `models/base.py`, which
+defines exactly these four columns. Never redefine them in a model, except
+the Card `updated_at` exception in rule 3.
+**Rationale:** One consistent shape for every table.
+**Example:**
 ```python
-class UserEntity(db.Model):
-    __tablename__ = "users"
-
-    id = db.Column(
-        db.UUID,
-        primary_key=True,
-        default=uuid.uuid4
-    )
-
-    email = db.Column(
-        db.String(255),
-        nullable=False,
-        unique=True,
-        index=True
-    )
+class BaseModel(db.Model):
+    __abstract__ = True
+    id = db.Column(db.Uuid, primary_key=True, default=uuid.uuid4)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False,
+                           default=utc_now, onupdate=utc_now)
+    deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 ```
 
+## 3. Timestamps
+**Rule:** All timestamps are timezone-aware UTC, produced by `utc_now()` in
+`flask_app/common/time.py` (`datetime.now(timezone.utc)`). Never use
+`datetime.utcnow()` or naive datetimes. Exception: `Card` defines its own
+`updated_at` with `default=utc_now` and NO `onupdate`; `Card_Service` sets it
+explicitly: on creation `created_at` and `updated_at` share one value (R3.1),
+on edit and on move only that Card's `updated_at` is set (R3.3, R4.7), and
+reindexing other Cards never changes their `updated_at`.
+**Rationale:** `onupdate` would bump the `updated_at` of every Card shifted by
+reindexing, which breaks R4.7 and the search ordering in R7.6.
+**Example:** `card.updated_at = now` where `now = utc_now()` is also used for
+`card.created_at` on creation.
+
+## 4. Data types
+**Rule:** Use these types:
+- Short strings (names, titles, email, display name): `db.String(255)`
+- Long text (descriptions, comment bodies): `db.Text`
+- Card and Column order index: `db.Integer`
+- Hashed passwords (and other hashes): `db.String(255)`
+- `version`: `db.Integer`, not null, default 1
+- Enum-like values (roles, status, event type): `db.String(50)` plus a
+  `CheckConstraint` listing the allowed values
+- Foreign keys to a `BaseModel` table: `db.Uuid`
+Length limits from the requirements (for example Board name 100, Card Title
+255, Comment 5000) are enforced in the service layer, not by column length.
+**Rationale:** Simple portable types; business limits live in one place.
+**Example:** `name = db.Column(db.String(255), nullable=False)`
+
+## 5. Relationships
+**Rule:** Define every relationship on both sides with `db.relationship()`,
+linked by `back_populates`, and always set `lazy` explicitly. Use
+`lazy="select"` for single parents, `lazy="selectin"` for collections that
+list endpoints load (to avoid N+1), and never `lazy="dynamic"`. Set
+`cascade="all, delete-orphan"` and `passive_deletes=True` on the parent side
+of cascading collections.
+**Rationale:** Both sides stay visible to `mypy`, and loading behavior is
+explicit.
+**Example:**
+```python
+class Board(BaseModel):
+    columns = db.relationship("Column", back_populates="board", lazy="selectin",
+                              cascade="all, delete-orphan", passive_deletes=True,
+                              order_by="Column.order_index")
+
+class Column(BaseModel):
+    board_id = db.Column(db.Uuid, db.ForeignKey("boards.id", ondelete="CASCADE"),
+                         nullable=False, index=True)
+    board = db.relationship("Board", back_populates="columns", lazy="select")
+```
+
+## 6. Constraints, ordering, and cascades
+**Rule:**
+- Primary keys are UUID v4. Ordering and tie-breaks by `id` only need to be
+  deterministic, not chronological.
+- Uniqueness of order positions, `(board_id, order_index)` for Columns and
+  `(column_id, order_index)` for Cards, is `DEFERRABLE INITIALLY DEFERRED`,
+  so a reindex inside one transaction does not violate it mid-statement.
+- Cascades follow `design.md`: deleting a Board cascades to its Columns, Cards,
+  Comments, Notifications, memberships, Invitation_Links, and Activity_Entries,
+  declared with `ondelete="CASCADE"`. Other foreign keys keep the default
+  (restrict).
+- `ActivityEntry.resource_id` is not a foreign key, because its target may
+  already be deleted.
+- Add an index on every foreign key used for filtering, plus the indexes
+  listed in `design.md`.
+**Rationale:** Prevents reindex failures and leftover rows after deletes (R1.6).
+**Example:**
+```python
+db.UniqueConstraint("column_id", "order_index", deferrable=True, initially="DEFERRED")
+```
+
+## 7. Deletion
+**Rule:** All deletions in the requirements are hard deletes (R1.6, R2.5,
+R3.5, R5.4). `deleted_at` exists on every table by project convention but is
+unused in V1: it stays NULL, and no query filters on it. Do not implement soft
+delete, trash, or restore.
+**Rationale:** Soft delete would break permanent deletion and the unique
+constraints on ordering, email, and membership.
+**Example:** `db.session.delete(card)`, not `card.deleted_at = utc_now()`.
+
+## 8. Migrations
+**Rule:** Generate with `flask --app flask_app.app db migrate -m "<message>"`,
+then review the file by hand before applying: autogenerate can miss
+`CheckConstraint` and deferrable constraints. One logical change per migration,
+every migration has a working `downgrade`, and applied migrations are never
+edited. Models contain no business logic.
+**Rationale:** Reviewed, reversible, reproducible schema changes.
+**Example:** a new column means a new migration, not an edit to an old one.
+
+## 9. Identifiers in code
+**Rule:** IDs are UUIDs. Use `<uuid:...>` route converters so a malformed ID
+returns 404 instead of a server error, and serialize IDs as strings. Timestamps
+are serialized as ISO 8601 UTC with `Z` by `common/serialization.py`.
+**Rationale:** Flask's default JSON provider formats datetimes in a non-ISO
+style, which would mismatch the frontend types.
+**Example:** `@cards_bp.post('/api/columns/<uuid:column_id>/cards')`
