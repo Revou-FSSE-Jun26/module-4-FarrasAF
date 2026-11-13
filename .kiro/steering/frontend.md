@@ -123,3 +123,36 @@ fileMatchPattern: "frontend/**/*.{ts,tsx}"
 **Rule:** Render user content (Titles, Descriptions, Comments) as plain text. Never use `dangerouslySetInnerHTML`.
 **Rationale:** `HttpOnly` cookies reduce the impact of XSS but do not replace escaping user content.
 **Example:** `<p>{comment.body}</p>`
+
+### 23. Token pages
+**Rule:** The pages `/invite/[token]` (anonymous Guest) and `/join/[token]`
+(Team join) must send the header `Referrer-Policy: no-referrer`, configured in
+`next.config.ts` through `headers()` for the sources `/invite/:token*` and
+`/join/:token*`. Never put these tokens in links, analytics, `console` output,
+or error messages shown to the user, and never copy them into `localStorage`.
+**Rationale:** The token is a credential that sits in the URL, and the Referer
+header could otherwise leak it to other sites.
+**Example:** the `next.config.ts` `headers()` entry for `/invite/:token*` sets
+`Referrer-Policy: no-referrer`.
+
+### 24. Guest and join pages
+**Rule:** `/invite/[token]` calls only `GET /api/guest/<token>/board` and
+`GET /api/guest/<token>/cards/<cardId>/comments` through `apiClient`, renders
+read-only, and never redirects to `/login`; a 403 shows a plain "link not
+available" message. Comments arrive as a flat list and the thread tree is built
+in the client from `parentCommentId`. `/join/[token]` first calls
+`GET /api/team-join-links/<token>` to show the Team name, and `accept` only
+after the user confirms; a not-logged-in user is sent to `/login` and returns to
+the same link. Both pages show one generic message for an invalid, inactive, or
+expired token.
+**Rationale:** Matches the Guest and Team join decisions, and avoids leaking
+which failure occurred.
+**Example:** the `/join/[token]` page shows "Join Team X?" with a confirm button.
+
+### 25. Mentions in the UI
+**Rule:** When the user picks a Board member in the mention picker, insert the
+token `@[<userId>]` into the Comment body. Render tokens as `@displayName` by
+looking the id up in the Board members list (`GET /api/boards/{boardId}/members`);
+if the id is not found, render `@unknown`. Render the result as plain text.
+**Rationale:** Matches the backend parser and keeps rule 22 (no raw HTML).
+**Example:** body `"cc @[3f2b...]"` renders as `cc @Alice`.

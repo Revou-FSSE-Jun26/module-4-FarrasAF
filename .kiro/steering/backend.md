@@ -36,12 +36,18 @@ stay current (R12.1).
 
 ## 3. Guest routes
 **Rule:** Guest endpoints live under `/api/guest/<token>/...`, are GET only,
-and need no authentication. One function in `access/` resolves the token to its
-Board and raises `AuthorizationError` for an unknown, inactive, or revoked
-token. Guest responses contain only what R11.3 allows (Board name and
-description, Columns, Cards, Comments) and `currentUserRole: "guest"`. Any other
-HTTP method on `/api/guest/` returns 403 `AuthorizationError`, not 405.
-**Rationale:** Guests are anonymous and read-only (R11.3, R11.4).
+and need no authentication. There are two: `GET /api/guest/<token>/board`
+(Board name, description, `currentUserRole: "guest"`, with its Columns and
+Cards) and `GET /api/guest/<token>/cards/<uuid:card_id>/comments` (a flat list
+of Comments with `parentCommentId`, oldest first). One function in `access/`
+resolves the token to its Board and raises `AuthorizationError` for an unknown,
+inactive, or revoked token, and for a token whose Board is archived. A Card that
+does not belong to the token's Board raises `NotFoundError`. Guest responses
+never include emails, `version`, or Activity data; Users appear only as
+`{ id, displayName }`. Any other HTTP method on `/api/guest/` returns 403
+`AuthorizationError`, not 405.
+**Rationale:** Guests are anonymous and read-only (R11.3, R11.4), and must learn
+nothing about other Boards.
 **Example:** `GET /api/guest/<token>/board` returns the Board with its Columns and Cards.
 
 ## 4. Input validation (Marshmallow)
@@ -152,7 +158,22 @@ otherwise.
 **Example:** `NOTIFICATIONS_PAGE_SIZE = 50` in `common/pagination.py`.
 
 ## 11. Logging
-**Rule:** Use `app.logger`. Log method, path, status, and user id. Never log
-passwords, tokens, cookies, request bodies, or Comment text.
-**Rationale:** Logs must be safe to share and to read in a deployment dashboard.
-**Example:** `app.logger.info("%s %s -> %s user=%s", method, path, status, user_id)`
+**Rule:** Use `app.logger`. Log the HTTP method, the route template (for example
+`/api/guest/<token>/board`, from `request.url_rule.rule`; use `unmatched` when
+there is no matching rule), the status, and the user id. Never log the raw
+request path or query string, passwords, tokens (including Invitation_Link and
+Team_Join_Link tokens), cookies, request bodies, or Comment text. Do not enable
+gunicorn's access log with the default format, because it prints the raw path.
+**Rationale:** Guest and join tokens are credentials that appear in URLs, and
+logs must be safe to share and to read in a deployment dashboard.
+**Example:** `app.logger.info("%s %s -> %s user=%s", request.method, rule, status, user_id)`
+
+## 12. Mentions
+**Rule:** A Mention is the token `@[<user-uuid>]` inside a Comment body. The
+mention parser lives in `comments/service.py` as a pure function that extracts
+distinct, valid UUIDs from the body. After the Comment is saved, create exactly
+one Notification per distinct mentioned User who is a current Member of the
+Board and ignore all other ids, in the same transaction as the Comment (R6.1,
+R6.8). Never reject a Comment because a mention is invalid.
+**Rationale:** Mentions are parsed in one place and cannot fail a Comment.
+**Example:** `"Please review @[3f2b...] and @[3f2b...]"` creates one Notification.

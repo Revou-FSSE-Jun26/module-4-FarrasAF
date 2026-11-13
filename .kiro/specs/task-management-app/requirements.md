@@ -58,7 +58,7 @@ The application targets clear visibility into task progress, task ownership, and
 3. WHEN an Admin submits a Board update request containing any subset of a Board name of 1 to 100 characters, a Board description of 0 to 2000 characters, and a Board visibility set to one of "private" or "team", THE Board_Service SHALL persist the supplied fields, leave any field not included in the request unchanged, and return the updated Board.
 4. WHEN an Admin submits a Board archive request, THE Board_Service SHALL set the Board status to archived and exclude the Board from active Board listings.
 5. WHEN an Admin submits a restore request for a Board whose status is archived, THE Board_Service SHALL set the Board status to active and include the Board in active Board listings.
-6. WHEN an Admin submits a permanent deletion request for a Board, THE Board_Service SHALL delete the Board together with its Columns, Cards, Comments, and Activity_Entries.
+6. WHEN an Admin submits a permanent deletion request for a Board, THE Board_Service SHALL delete the Board together with its Columns, Cards, Comments, Notifications, Board memberships, Invitation_Links, and Activity_Entries.
 7. IF a User without the Admin role submits a Board settings, archive, restore, or deletion request, THEN THE Access_Control_Service SHALL reject the request with an authorization error and SHALL leave the Board unchanged.
 8. IF a User submits a Board creation or Board name update request whose Board name is empty after trimming whitespace or exceeds 100 characters, THEN THE Board_Service SHALL reject the request with a validation error indicating the invalid Board name and SHALL leave Board data unchanged.
 9. IF an Admin submits a restore request for a Board whose status is not archived, THEN THE Board_Service SHALL reject the request with a validation error indicating the Board is not archived and SHALL leave the Board status unchanged.
@@ -208,6 +208,7 @@ The application targets clear visibility into task progress, task ownership, and
 6. IF an Admin submits a member removal or role change request that would leave the Board with zero Admins, THEN THE Access_Control_Service SHALL reject the request with a validation error indicating the Board must retain at least one Admin and SHALL leave Board membership unchanged.
 7. IF a User without the Admin role submits a member invitation, removal, or role change request, THEN THE Access_Control_Service SHALL reject the request with an authorization error and SHALL leave Board membership unchanged.
 8. IF an Admin submits a member invitation request for a User who is not a Team_Member of the Board's Team, THEN THE Access_Control_Service SHALL reject the request with a validation error indicating the User is not a Team_Member and SHALL leave Board membership unchanged.
+9. WHEN a Member or Admin requests the members of a Board, THE Access_Control_Service SHALL return each Board member's User identifier, display name, and Board role.
 
 ### Requirement 11: Invitation Links and Guest Access
 
@@ -221,7 +222,9 @@ The application targets clear visibility into task progress, task ownership, and
 4. IF a Guest, including a request that presents only an Invitation_Link token without authentication, submits a request to create, edit, delete, or move a Card, or to create, edit, or delete a Comment, or to perform any Column, member, settings, or Board lifecycle operation, THEN THE Access_Control_Service SHALL reject the request with an authorization error and SHALL leave the affected resource unchanged.
 5. IF a Guest accesses a Board through an inactive Invitation_Link, THEN THE Access_Control_Service SHALL reject the access request with an authorization error.
 6. IF a request presents an Invitation_Link token that does not match any Invitation_Link, THEN THE Access_Control_Service SHALL reject the access request with an authorization error.
-7. IF a User without the Admin role submits an Invitation_Link generation or revocation request, THEN THE Access_Control_Service SHALL reject the request with an authorization error and SHALL leave all Invitation_Links unchanged.
+7. IF a User without the Admin role submits an Invitation_Link generation, revocation, or listing request, THEN THE Access_Control_Service SHALL reject the request with an authorization error and SHALL leave all Invitation_Links unchanged.
+8. IF a request presents an active Invitation_Link token bound to a Board whose status is archived, THEN THE Access_Control_Service SHALL reject the request with an authorization error.
+9. WHEN an Admin requests the Invitation_Links of a Board, THE Access_Control_Service SHALL return each Invitation_Link's token, status, and creation timestamp.
 
 ### Requirement 12: Role-Based Access Control
 
@@ -308,5 +311,7 @@ The application targets clear visibility into task progress, task ownership, and
 3. WHEN an authenticated User accepts an active, unexpired Team_Join_Link, THE Team_Service SHALL make the User a Team_Member of the bound Team with the Team_Role Team_Regular, effective for the User's subsequent requests, and SHALL return the Team identifier.
 4. IF a User accepts a token that matches no Team_Join_Link, or that identifies an inactive or expired Team_Join_Link, THEN THE Team_Service SHALL reject the request with a validation error indicating the Team_Join_Link is invalid and SHALL leave Team membership unchanged.
 5. IF a User who is already a Team_Member of the bound Team accepts the Team_Join_Link, THEN THE Team_Service SHALL reject the request with a validation error indicating the User is already a Team_Member and SHALL leave the User's Team_Role unchanged.
-6. IF a User who does not hold the Team_Role Team_Admin submits a Team_Join_Link generation or revocation request, THEN THE Access_Control_Service SHALL reject the request with an authorization error and SHALL leave all Team_Join_Links unchanged.
+6. IF a User who does not hold the Team_Role Team_Admin submits a Team_Join_Link generation, revocation, or listing request, THEN THE Access_Control_Service SHALL reject the request with an authorization error and SHALL leave all Team_Join_Links unchanged.
 7. IF an unauthenticated User submits a Team_Join_Link acceptance request, THEN THE Access_Control_Service SHALL reject the request with an authentication error and SHALL leave Team membership unchanged.
+8. WHEN an authenticated User requests a preview of a Team_Join_Link, THE Team_Service SHALL return the name of the bound Team without changing Team membership if the Team_Join_Link is active and unexpired, and SHALL otherwise reject the request with a validation error indicating the Team_Join_Link is invalid.
+9. WHEN a Team_Admin requests the Team_Join_Links of a Team, THE Team_Service SHALL return each Team_Join_Link's token, status, expiration timestamp, and creation timestamp.

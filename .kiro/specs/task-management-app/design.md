@@ -8,17 +8,19 @@ The design traces directly to the acceptance criteria in `requirements.md`; requ
 
 ### Technology Stack
 
-- **Frontend:** Next.js (App Router) + React + TypeScript + Tailwind CSS. Drag-and-drop via a client library (e.g., `@dnd-kit/core`). HTTP polling for notifications.
-- **Backend:** Flask + Python, organized as service modules behind a REST API. Flask blueprints map to the services named in the requirements glossary.
-- **Database:** PostgreSQL accessed through SQLAlchemy ORM, with Alembic migrations.
-- **Auth:** Stateless JWT access tokens (short-lived) + longer-lived refresh tokens; refresh tokens are revocable on logout. Passwords hashed with a slow KDF (bcrypt/argon2).
+- **Frontend:** Next.js (App Router) + React + TypeScript (strict mode) + Tailwind CSS. Drag-and-drop via `@dnd-kit/core` and `@dnd-kit/sortable`. HTTP polling for notifications (no WebSockets). All application code lives under `frontend/src/`.
+- **Backend:** Python 3.14 + Flask (application factory + blueprints), organized as service modules behind a REST JSON API under `backend/flask_app/`. Flask blueprints map to the services named in the requirements glossary, plus a `teams/` module for Team_Service. Input validation uses Marshmallow (request shape and format); rules that need the database stay in services. Backend libraries: Flask-SQLAlchemy, Flask-Migrate, PyJWT, `psycopg[binary]`, `python-dotenv`, `gunicorn`, `argon2-cffi`, `marshmallow`.
+- **Database:** PostgreSQL accessed through SQLAlchemy ORM, with Alembic migrations. No Docker. Local PostgreSQL for development; Supabase-hosted Postgres (plain PostgreSQL via SQLAlchemy, Session pooler, `sslmode=require`) in production.
+- **Auth:** Stateless JWT **Access_Token** (15 minutes) carrying **identity only** (user id and expiry, no role claims — R15.13) + a hashed, revocable **Refresh_Token** (7 days). Both are delivered as `HttpOnly` cookies (`SameSite=Lax`, no `Domain`, `Secure` controlled by `COOKIE_SECURE`); the refresh cookie is scoped to `/api/auth/refresh` and `/api/auth/logout`. Passwords hashed with argon2 (`argon2-cffi`).
+- **Deployment:** Frontend on Vercel, backend on Render (native Python runtime, `gunicorn`), database on Supabase Postgres, all from this monorepo. The browser only calls same-origin `/api/*` paths, which Next.js rewrites to the backend; no CORS.
 
 ### Design Goals and Non-Functional Targets (R14)
 
 - p95 latency < 300 ms for non-search, non-analytics, non-permanent-delete API requests under up to 100 concurrent users (R14.1). Achieved via indexed queries, bounded page sizes, and avoiding N+1 access with eager loading.
 - 99.5% monthly availability measured by a health-check endpoint (R14.2).
 - Responsive layouts: full board without horizontal scroll at >= 1024px (R14.3); usable, non-overlapping controls below 1024px (R14.4).
-- Independent concurrent writes with no lost updates, enforced via optimistic concurrency (R14.5, R13).
+- Independent concurrent writes with no lost updates, enforced via optimistic concurrency on Card and Comment edits (R14.5, R13).
+- Target p95 < 300 ms for regular (non-search, non-analytics, non-permanent-delete) requests; `GET /api/health` is public, returns 200, and never touches the database (R14.2).
 
 ## Architecture
 
@@ -29,7 +31,8 @@ graph TD
     Browser["Next.js / React Frontend (TypeScript + Tailwind)"]
     subgraph Flask Backend
         Auth["Authentication_Service"]
-        AC["Access_Control_Service (RBAC + Invitation validation)"]
+        AC["Access_Control_Service (RBAC + Invitation validation + Guest)"]
+        Team["Team_Service"]
         Board["Board_Service"]
         Column["Column_Service"]
         Card["Card_Service"]
@@ -41,8 +44,11 @@ graph TD
     end
     DB[("PostgreSQL via SQLAlchemy")]
 
-    Browser -->|"HTTPS REST + JWT access token"| Auth
-    Browser -->|"HTTPS REST + JWT access token"| AC
+    Browser -->|"same-origin /api/* (HttpOnly cookies), proxied by Next.js"| Auth
+    Browser -->|"same-origin /api/* (HttpOnly cookies), proxied by Next.js"| AC
+    Browser -->|"same-origin /api/* (HttpOnly cookies)"| Team
+    Team --> DB
+    AC --> Team
     AC --> Board
     AC --> Column
     AC --> Card
@@ -71,8 +77,8 @@ graph TD
 
 Every API request flows through two gates before reaching a domain service:
 
-1. **Authentication gate (Authentication_Service).** Validates the JWT access token's signature and expiry. If the request is unauthenticated, or the token is expired/invalid, it is rejected with an authentication error before any Board role is evaluated (R12.6, R15.9, R15.10).
-2. **Authorization gate (Access_Control_Service).** Resolves the authenticated User's role on the target Board (or validates an Invitation_Link for Guest access), then either forwards the request to the target domain service or rejects it with an authorization error (R12.1–R12.5).
+1. **Authentication gate (Authentication_Service).** Reads the JWT Access_Token from its `HttpOnly` cookie and validates its signature and expiry. The token carries identity only (user id and expiry); it has no role claims (R15.13). If the request is unauthenticated, or the token is expired/invalid, it is rejected with an authentication error before any Board role is evaluated (R12.6, R15.9, R15.10). Guest routes under `/api/guest/<token>/...` are exempt from this gate and are governed by Requirement 11.
+2. **Authorization gate (Access_Control_Service).** Resolves the authenticated User's role on the target Board by reading the stored `BoardMembership` for that User and Board on this request (or validates an Invitation_Link for Guest access), then either forwards the request to the target domain service or rejects it with an authorization error (R12.1–R12.5). Team-scoped endpoints resolve the User's Team_Role from the stored `TeamMembership` the same way.
 
 ```mermaid
 sequenceDiagram
@@ -82,13 +88,13 @@ sequenceDiagram
     participant Svc as Domain Service
     participant DB as PostgreSQL
 
-    C->>Auth: Request + JWT access token
+    C->>Auth: Request + access-token cookie (identity only)
     alt missing/expired/invalid token
         Note over Auth: Validate JWT signature and expiry
         Auth-->>C: 401 authentication error
     else authenticated
         Auth->>AC: User identity + request
-        AC->>DB: Resolve role (membership) or validate Invitation_Link
+        AC->>DB: Resolve role from stored BoardMembership (or validate Invitation_Link)
         alt role not permitted / no role / inactive link
             AC-->>C: 403 authorization error (resource unchanged)
         else permitted
@@ -99,14 +105,15 @@ sequenceDiagram
     end
 ```
 
-Role resolution reads the role claims embedded in the JWT access token (the token's embedded role snapshot), so role changes only take effect after the affected Member's access token is refreshed or re-issued; in-flight and already-authenticated requests keep their existing permissions (R10.3). See Authentication & Authorization below.
+Role resolution reads the stored `BoardMembership` (and, for Team-scoped endpoints, the stored `TeamMembership`) for the authenticated User on every request; the Access_Token never carries role claims (R15.13). Because the role is read fresh from stored membership each time, a role change or a removal takes effect on the Member's very next request, with no need to refresh or re-issue a token (R10.2, R10.3, R12.1, R16.6). See Authentication & Authorization below.
 
 ### Service Responsibilities
 
 | Service | Responsibility | Primary Requirements |
 | --- | --- | --- |
-| Authentication_Service | Registration, login, logout (refresh-token revocation), JWT access-token issuance, token refresh, auth enforcement | R15, R12.6 |
-| Access_Control_Service | RBAC decisions, membership/role management, invitation link lifecycle & validation, Guest read access | R10, R11, R12 |
+| Authentication_Service | Registration (account only, no auto-login), login (sets auth cookies, returns identity), logout (refresh-token revocation, clears cookies), JWT access-token issuance, token refresh, auth enforcement | R15, R12.6 |
+| Team_Service | Team creation, Team membership listing, Team_Join_Link lifecycle (generate/revoke/list/preview/accept) | R16, R17 |
+| Access_Control_Service | RBAC decisions from stored membership, Board membership/role management, invitation link lifecycle & validation, anonymous Guest read access | R10, R11, R12 |
 | Board_Service | Board create/update/archive/restore/permanent-delete, default columns, settings | R1 |
 | Column_Service | Column create/edit/reorder/delete with contiguous reindexing, empty-before-delete rule | R2 |
 | Card_Service | Card CRUD, assignment, move/reorder with reindexing, position persistence, optimistic concurrency | R3, R4, R13 |
@@ -124,13 +131,18 @@ All multi-step mutations (atomic multi-field updates R1.10/R3.10, reindexing R2.
 
 ### Backend Layering
 
+Each service package holds `routes.py` (a Flask Blueprint with thin handlers, max 5 lines, full `/api` paths and no `url_prefix`), `service.py` (`*_service` business logic, one transaction per route-called function), `schema.py` (Marshmallow input schemas; omitted when a module takes no body or query string), and `__init__.py` (exports the Blueprint). Cross-module calls go through service functions, never another module's routes; models live only in `models/`.
+
 ```
-flask_app/
-  app.py                 # app factory, blueprint registration, error handlers
-  extensions.py          # SQLAlchemy db, migrate
-  models/                # SQLAlchemy entities (Data Models section)
-  auth/                  # Authentication_Service: routes + logic
-  access/                # Access_Control_Service: RBAC decorators, membership, invitations
+backend/flask_app/
+  app.py                 # app factory (create_app), blueprint registration, error handlers
+  extensions.py          # SQLAlchemy db, migrate; metadata naming_convention
+  config.py              # settings from env (DATABASE_URL, JWT_SECRET_KEY, COOKIE_SECURE, ...)
+  models/                # SQLAlchemy entities (Data Models section); base.py = BaseModel
+  auth/                  # Authentication_Service: routes + logic; @token_required, auth cookies
+  access/                # Access_Control_Service: membership, invitations, Guest routes;
+  #                        rbac.py holds @require_role + the pure role-decision function
+  teams/                 # Team_Service: Teams, Team memberships, Team_Join_Links
   boards/                # Board_Service
   columns/               # Column_Service
   cards/                 # Card_Service
@@ -139,12 +151,23 @@ flask_app/
   search/                # Search_Service
   activity/              # Activity_Service
   analytics/             # Analytics_Service
-  common/                # validation, ordering helpers, cursor codec, errors
+  common/                # exceptions.py, validation.py (BaseSchema, TrimmedStr, NonBlankStr,
+  #                        load_schema), serialization.py (read_json, read_query, json_response),
+  #                        ordering.py (reindex), cursor.py, pagination.py (page-size caps),
+  #                        time.py (utc_now), health.py (public GET /api/health)
 ```
+
+`access/` may define two Blueprints: `access_bp` (members and invitations) and `guest_bp` (the `/api/guest/*` routes). `common/health.py` and `access/rbac.py` have no routes structured per the module convention.
 
 ### Cross-Cutting Interfaces
 
-**RBAC decorator.** A `@require_role(board_param, min_role)` decorator wraps route handlers. It resolves the caller's effective role (from the JWT access token's role claims) on the target Board and either proceeds or raises `AuthorizationError`. For read endpoints it also accepts an Invitation_Link token granting Guest read access (R11.3, R12.2).
+**Authentication decorator.** `@token_required` (in `auth/`) reads the Access_Token from its cookie, validates it, loads the User, and raises `AuthenticationError` before the handler runs. Routes needing only identity (teams, notifications, search, `GET /api/auth/me`) use it directly.
+
+**RBAC decorator.** `@require_role('member' | 'admin')` (in `access/rbac.py`) runs the authentication check first, then resolves the target Board from the route parameters and reads the caller's role from the stored `BoardMembership` in the database — never from the token (R12.1). It either proceeds or raises `AuthorizationError`. The pure role-decision function (role + operation → allow/deny) lives alongside it so it can be property-tested without the database. Guest read access is handled by the separate Guest routes in rule 3 of `backend.md`, not by this decorator.
+
+**Input validation (Marshmallow).** Every request body or query string is validated by a schema in the module's `schema.py` before the service runs, via `load_schema(SomeSchema(), read_json())` or `read_query()`. Schemas inherit `BaseSchema` (`unknown = RAISE`), use snake_case field names (conversion from camelCase happens in `read_json`/`read_query`), and never use `data_key`. `version` is never `required` in a schema: a missing `version` raises `ConflictError` in the service (R13.5); a present non-integer `version` is a validation error. Rules needing the database (Assignee is a Board Member, target index in range, parent Comment on the same Card) run in the service.
+
+**Serialization helper.** `read_json()` / `read_query()` convert incoming camelCase keys to snake_case; `json_response(payload, status)` builds the response, converts snake_case keys back to camelCase, and formats UUIDs as strings and timestamps as ISO 8601 UTC. This single helper in `common/serialization.py` is the only place field-name conversion happens; services and routes never rename fields by hand.
 
 **Ordering helper.** A shared `reindex(items)` utility assigns contiguous `order_index` values `0..n-1` in the current sequence order. Used by Column reorder/delete (R2.3, R2.5) and Card move/reorder/delete (R4.2, R3.5).
 
@@ -154,20 +177,25 @@ flask_app/
 
 ### Frontend Structure
 
-- **App Router pages:** `/login`, `/register`, `/boards`, `/boards/[boardId]` (board view with columns/cards + drag-and-drop), `/boards/[boardId]/activity`, `/boards/[boardId]/analytics`, `/boards/[boardId]/settings`, `/invite/[token]` (guest view), `/search`.
-- **State/data:** A typed API client (fetch wrapper that attaches the JWT access token (and refreshes it via the refresh endpoint when expired) and surfaces typed errors). Notifications polled on an interval via the cursor endpoint.
-- **Drag-and-drop:** Client computes the target column id and target order index, then calls the move endpoint; UI optimistically reorders and reconciles with the server's authoritative positions (R4.3).
-- **Responsive layout:** Tailwind breakpoints render a horizontally laid out board at >= 1024px and a stacked/scrollable-per-column layout below it, avoiding horizontal page scroll and overlap (R14.3, R14.4).
+All application code lives under `frontend/src/` (`app/` for App Router pages, `components/` with `shared/` Base* primitives, `hooks/`, `lib/`, `types/api.ts`); Playwright E2E tests live in `frontend/e2e/`. Imports use the `@/` alias mapped to `src/`.
+
+- **App Router pages:** `/login`, `/register`, `/teams` (Team list and creation), `/teams/[teamId]` (members and join links), `/join/[token]` (accept a Team_Join_Link, login required), `/boards`, `/boards/[boardId]` (board view with columns/cards + drag-and-drop), `/boards/[boardId]/activity`, `/boards/[boardId]/analytics`, `/boards/[boardId]/settings`, `/invite/[token]` (anonymous Guest view, calls `/api/guest/...`), `/search`.
+- **State/data:** One typed API client in `src/lib/apiClient.ts` that calls same-origin `/api/...` paths (proxied to the backend by Next.js rewrites, never the backend URL). Authentication relies on `HttpOnly` cookies the browser sends automatically; the client never reads, stores, or attaches tokens, and nothing goes in `localStorage`/`sessionStorage`. On a `401` it calls the refresh endpoint once and retries, except on the auth endpoints and public pages. API request/response types are camelCase and live in `src/types/api.ts`. Board responses carry `currentUserRole` (`admin | member | guest`) and Team responses carry `currentUserTeamRole`; `GET /api/auth/me` returns identity only. The client never decodes tokens.
+- **Notifications:** Polled on an interval through `useNotifications`. Each poll requests the newest page **without a cursor**; `nextCursor` is used only to load older pages on demand (R6.2, R6.6).
+- **Drag-and-drop:** Uses `@dnd-kit/core` + `@dnd-kit/sortable`. A hook computes the target column id and target order index, then calls the move endpoint; UI optimistically reorders and reconciles with the server's authoritative positions, rolling back on error (R4.3, R13).
+- **Token pages:** `/invite/[token]` and `/join/[token]` send `Referrer-Policy: no-referrer` (configured in `next.config.ts`) and never leak the token into links, analytics, or storage.
+- **Responsive layout:** Tailwind breakpoints (`lg:` = 1024px) render a horizontally laid out board at >= 1024px and a stacked/scrollable-per-column layout below it, avoiding horizontal page scroll and overlap (R14.3, R14.4).
 
 ## Data Models
 
-All entities use a surrogate primary key (`id`, UUID or bigint). Timestamps are stored in UTC. `Card` and `Comment` carry a `version` integer used for optimistic concurrency (R13).
+Every model inherits `BaseModel`, which defines exactly four columns: `id` (UUID v4 primary key), `created_at`, `updated_at`, and `deleted_at` (all timezone-aware UTC via `utc_now()`). `deleted_at` exists by project convention but is unused in V1 (all deletes are hard deletes; it stays NULL and no query filters on it). Enum-like values are stored as `String(50)` plus a `CheckConstraint`. `Card` and `Comment` carry a `version` integer used for optimistic concurrency (R13). `Card` is the one exception to `BaseModel`: it defines its own `updated_at` with `default=utc_now` and **no** `onupdate`, so reindexing never bumps a shifted Card's `updated_at`; `Card_Service` sets it explicitly (R3.1, R3.3, R4.7). Relationships are declared on both sides with `back_populates` and an explicit `lazy`. Order-position uniqueness — `(board_id, order_index)` for Columns and `(column_id, order_index)` for Cards — is `DEFERRABLE INITIALLY DEFERRED` so a single-transaction reindex is not rejected mid-statement.
 
 ```mermaid
 erDiagram
     USER ||--o{ TEAM_MEMBERSHIP : has
     USER ||--o{ REFRESH_TOKEN : has
     TEAM ||--o{ TEAM_MEMBERSHIP : has
+    TEAM ||--o{ TEAM_JOIN_LINK : has
     TEAM ||--o{ BOARD : owns
     BOARD ||--o{ COLUMN : contains
     BOARD ||--o{ BOARD_MEMBERSHIP : has
@@ -187,22 +215,28 @@ erDiagram
 ### Entities
 
 **User** — registered account.
-- `id`, `email` (unique, citext/lowercased), `password_hash`, `display_name`, `created_at`.
+- `id`, `email` (unique, lowercased), `password_hash` (argon2), `display_name` (1–50 chars trimmed, R15.14), plus `BaseModel` columns.
 - `failed_login_attempts` (int, default `0`) — count of consecutive failed login attempts for the account; incremented on each failed login and reset to zero on a successful login (R15.4, R15.6).
 - `locked_until` (timestamp, nullable, UTC) — when set and in the future, the account is locked and all login attempts are rejected; cleared on a successful login and effectively lifted once the timestamp has elapsed (R15.4, R15.5, R15.7).
 - Unique constraint on `email` enforces R15.15. Password stored only as hash (R15.1).
 - Lockout tracking: a failed login increments `failed_login_attempts` and, when the counter reaches 3, sets `locked_until = now + 15 minutes` (R15.4). A successful login sets `failed_login_attempts = 0` and clears `locked_until` (R15.6). Login handling treats an account as locked whenever `locked_until` is set and greater than the current time; once that window elapses, login is accepted again and the counter resets to zero (R15.5, R15.7).
 
 **RefreshToken** — issued refresh credential enabling access-token minting.
-- `id`, `user_id` (FK), `token_hash` (unique; the refresh token stored hashed, not plaintext), `issued_at`, `expires_at`, `revoked` (bool, default `false`), `created_at`.
+- `id`, `user_id` (FK), `token_hash` (unique; the refresh token stored hashed with `secrets.token_urlsafe` entropy, never plaintext), `expires_at`, `revoked` (bool, default `false`), plus the `BaseModel` columns (`created_at` is the issue time).
 - Logout sets `revoked = true` (R15.8). Refresh validates the token exists, is not revoked, and not expired (R15.11, R15.12).
-- JWT access tokens are stateless and are not stored; only refresh tokens are persisted (hashed) to support revocation.
+- JWT Access_Tokens are stateless, carry identity only (no role claims, R15.13), and are not stored; only refresh tokens are persisted (hashed) to support revocation. Both tokens travel only in `HttpOnly` cookies.
 
 **Team** — owns Boards.
-- `id`, `name`, `created_at`.
+- `id`, `name` (1–100 chars trimmed), plus `BaseModel` columns (R16.1, R16.2).
+- Created by any authenticated User; the creator becomes a Team_Member with Team_Role `team_admin` (R16.1). Teams cannot be renamed, archived, or deleted in V1.
 
-**TeamMembership** — User-in-Team join.
-- `id`, `team_id` (FK), `user_id` (FK), `created_at`. Unique `(team_id, user_id)`.
+**TeamMembership** — User-in-Team join (Team_Role source of truth).
+- `id`, `team_id` (FK), `user_id` (FK), `team_role` (enum: `team_admin` | `team_regular`), plus `BaseModel` columns. Unique `(team_id, user_id)`.
+- Team_Role is resolved from this table on every request (R16.6). V1 has no leave, remove, or role-change for Teams.
+
+**TeamJoinLink** — shareable token that lets an authenticated User join a Team.
+- `id`, `team_id` (FK), `token` (unique, high-entropy via `secrets.token_urlsafe`), `status` (enum: `active` | `inactive`, default `active`), `expires_at` (creation time + 7 days), `created_by_id` (FK User), plus `BaseModel` columns.
+- Revocation flips only this link's `status` to `inactive` (R17.2). Validity is computed from `expires_at` at read time (expired links are rejected even though the stored `status` stays `active`; there is no background job) (R17.1, R17.4). Accepting an active, unexpired link makes the User a `team_regular` member of the bound Team (R17.3).
 
 **Board** — workspace belonging to a Team.
 - `id`, `team_id` (FK), `name` (1–100 chars trimmed), `description` (0–2000 chars, default ""), `visibility` (enum: `private` | `team`, default `private`), `status` (enum: `active` | `archived`, default `active`), `created_at`, `updated_at`.
@@ -228,9 +262,9 @@ erDiagram
 - `id`, `recipient_id` (FK User), `comment_id` (FK Comment), `board_id` (FK), `status` (enum: `unread` | `read`, default `unread`), `created_at`.
 - Unique `(recipient_id, comment_id)` enforces "exactly one Notification per distinct mentioned Member per Comment" (R6.1). Index on `(recipient_id, created_at desc, id desc)` and a partial variant filtered on `status = unread` to support cursor pagination and the unread-only filter (R6.2–R6.4, R6.7).
 
-**InvitationLink** — shareable Guest-access token for a Board.
-- `id`, `board_id` (FK), `token` (unique, high-entropy), `status` (enum: `active` | `inactive`, default `active`), `created_by_id` (FK User), `created_at`.
-- Revocation flips `status` to `inactive` without touching other links (R11.2). Lookup by `token` validates Guest access (R11.3, R11.5, R11.6).
+**InvitationLink** — shareable anonymous Guest-access token for a Board.
+- `id`, `board_id` (FK), `token` (unique, high-entropy via `secrets.token_urlsafe`), `status` (enum: `active` | `inactive`, default `active`), `created_by_id` (FK User), plus `BaseModel` columns.
+- Revocation flips `status` to `inactive` without touching other links (R11.2). Lookup by `token` validates Guest access and grants read-only access iff the link exists and is `active` (R11.3, R11.5, R11.6). A token bound to an archived Board is rejected with `AuthorizationError` until the Board is restored (R11.8).
 
 **ActivityEntry** — logged Board event.
 - `id`, `board_id` (FK), `actor_id` (FK User), `event_type` (enum: `card_created`, `card_updated`, `card_moved`, `card_deleted`, `comment_created`, `comment_edited`, `comment_deleted`, `column_created`, `column_deleted`, `member_joined`, `member_removed`), `resource_id` (affected primary resource identifier), `secondary_resource_id` (nullable; e.g., Card id for comment events R8.6/R8.7, or target User id for member events R8.10/R8.11), `created_at`.
@@ -247,38 +281,43 @@ Implementation uses a conditional `UPDATE ... WHERE id = :id AND version = :expe
 
 ## API Design
 
-All endpoints are REST over HTTPS and (except auth endpoints noted below) require a valid JWT access token; unauthenticated requests get `401` before role evaluation (R12.6). Board-scoped endpoints additionally pass the RBAC gate. All request/response bodies are JSON. Standard error envelope is defined in Error Handling.
+All endpoints are REST over HTTPS, use JSON bodies, and (except the public endpoints noted below) require a valid Access_Token read from its `HttpOnly` cookie; unauthenticated requests get `401` before role evaluation (R12.6). Board-scoped endpoints additionally pass the RBAC gate, which reads the caller's role from stored `BoardMembership`. State-changing requests never use GET.
+
+The only public (no-auth) endpoints are: `GET /api/health`; `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, and `POST /api/auth/logout` (the last two authenticated by the refresh cookie); and the Guest routes under `/api/guest/<token>/...` (GET only).
 
 Common conventions:
-- Resource create returns `201` with the created resource (and its `id`).
-- Optimistic-concurrency writes on Cards/Comments require a `version` field in the body or an `If-Match`-style header; retrievals return the current `version` (R13).
-- Collection ordering and caps are server-enforced, not client-controlled.
+- **camelCase JSON.** Request and response JSON use camelCase; the database and Python use snake_case. Conversion happens only in `common/serialization.py` (`read_json`, `read_query`, `json_response`). Only keys are camelCased, never enum values (which are sent exactly as stored, e.g. `team_admin`, `card_moved`).
+- **Unwrapped responses.** Success returns the resource or result directly, with no `data` envelope. Create returns `201` with the created resource (and its `id`). Other successes return `200`. `DELETE` returns `204` with no body. Errors use `{ "error": { "code", "message", "field?" } }`.
+- **Identifiers and time.** `id` values are UUID strings; timestamps are ISO 8601 UTC. Routes use `<uuid:...>` converters so a malformed id returns `404`.
+- **Optimistic concurrency.** `version` is a plain JSON body field on Card and Comment `PATCH` only — there is no `If-Match` header. A missing `version` is a `ConflictError` (R13.5), not a validation error; move, reorder, and delete need no `version` (R13.6). Retrievals return the current `version` (R13.1).
+- **Pagination.** Collection ordering and caps are server-enforced: Notifications cursor-based (50/page), Activity page-index (100/page), Search capped at 100.
+- **Role fields.** Board responses include `currentUserRole` (`admin | member | guest`); Team responses include `currentUserTeamRole` (`team_admin | team_regular`).
 
 ### Authentication_Service (R15)
 
 | Method | Path | Auth | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| POST | `/api/auth/register` | none | Create account; email valid-format, password >= 8 chars | R15.1, R15.14, R15.15, R15.16 |
-| POST | `/api/auth/login` | none | Verify credentials; enforce account lockout; return access token (JWT) + refresh token; generic error on failure | R15.2, R15.3, R15.4, R15.5 |
-| POST | `/api/auth/logout` | access token | Revoke the caller's refresh token | R15.8 |
-| POST | `/api/auth/refresh` | refresh token | Exchange a valid, non-revoked refresh token for a new access token | R15.11, R15.12, R15.13 |
-| GET | `/api/auth/me` | access token | Return current user and role claims read from the access token | R15.10 |
+| POST | `/api/auth/register` | none (public) | Create account only (no auto-login); email valid-format, password >= 8 chars, displayName 1–50 trimmed | R15.1, R15.14, R15.15, R15.16 |
+| POST | `/api/auth/login` | none (public) | Verify credentials; enforce lockout; set both auth cookies; return user identity; generic error on failure | R15.2, R15.3, R15.4, R15.5 |
+| POST | `/api/auth/logout` | refresh cookie | Revoke the caller's refresh token; clear both cookies | R15.8 |
+| POST | `/api/auth/refresh` | refresh cookie | Exchange a valid, non-revoked, non-expired refresh token for a new access token (identity only) | R15.11, R15.12, R15.13 |
+| GET | `/api/auth/me` | access cookie | Return current user identity only (id, email, displayName) | R15.10, R15.13 |
 
-Login returns a short-lived JWT access token (carrying identity and Board role claims) plus a longer-lived refresh token (R15.2). Login failure returns a single generic `authentication error` that does not reveal whether email or password was wrong (R15.3). Login also enforces account lockout: while an account's `locked_until` is in the future the login is rejected with the same generic authentication error and no tokens are issued, even when the submitted credentials are valid and without revealing that the account is locked (R15.4, R15.5). Refresh exchanges a valid, non-revoked, non-expired refresh token for a new access token with current role claims (R15.11, R15.13); a revoked/expired/invalid refresh token is rejected with an authentication error and no token issued (R15.12).
+Registration creates an account only; it does not log the user in and issues no tokens. Login verifies credentials, enforces account lockout, sets the `HttpOnly` access and refresh cookies, and returns the user identity (never a token in the body) (R15.2). Login failure returns a single generic `authentication error` that does not reveal whether email or password was wrong (R15.3). Login also enforces account lockout: while an account's `locked_until` is in the future the login is rejected with the same generic authentication error and no tokens are issued, even when the submitted credentials are valid and without revealing that the account is locked (R15.4, R15.5). Logout is authenticated by the refresh cookie, revokes the stored refresh token, and clears both cookies (R15.8). Refresh exchanges a valid, non-revoked, non-expired refresh token for a new access token carrying identity only (no role claims, R15.13); a revoked/expired/invalid refresh token is rejected with an authentication error and no token issued (R15.12). `GET /api/auth/me` returns identity only; roles are read per request from stored membership and surfaced on Board and Team responses, not here.
 
 ### Board_Service (R1)
 
 | Method | Path | Min Role | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| POST | `/api/boards` | Admin (team) | Create board (+3 default columns) | R1.1, R1.2, R1.8 |
-| GET | `/api/boards` | Member+ | List active boards the user can access | R1.4, R1.5 |
-| GET | `/api/boards/{boardId}` | Member+/Guest(read) | Fetch board | R12 |
-| PATCH | `/api/boards/{boardId}` | Admin | Partial update name/description/visibility atomically | R1.3, R1.8, R1.10 |
-| POST | `/api/boards/{boardId}/archive` | Admin | Archive | R1.4 |
-| POST | `/api/boards/{boardId}/restore` | Admin | Restore if archived | R1.5, R1.9 |
-| DELETE | `/api/boards/{boardId}` | Admin | Permanent delete + cascade | R1.6 |
+| POST | `/api/boards` | Team_Member of target Team | Create board (+3 default columns), creator becomes Admin | R1.1, R1.2, R1.8, R1.11, R1.12 |
+| GET | `/api/boards` | authenticated | List active boards the user is a member of (or archived boards they Admin with `?archived`) | R1.4, R1.5, R1.13 |
+| GET | `/api/boards/{boardId}` | Member/Admin | Fetch board incl. `currentUserRole` | R1.14, R12.1 |
+| PATCH | `/api/boards/{boardId}` | Admin | Partial update name/description/visibility atomically | R1.3, R1.7, R1.8, R1.10, R1.14 |
+| POST | `/api/boards/{boardId}/archive` | Admin | Archive | R1.4, R1.7 |
+| POST | `/api/boards/{boardId}/restore` | Admin | Restore if archived | R1.5, R1.7, R1.9 |
+| DELETE | `/api/boards/{boardId}` | Admin | Permanent delete + cascade (`204`) | R1.6, R1.7 |
 
-`PATCH` accepts any subset of `{name, description, visibility}`; omitted fields are left unchanged; any invalid supplied field rejects the whole request atomically (R1.3, R1.10). Non-Admins are rejected with an authorization error and no change (R1.7).
+Board creation is open to any Team_Member of the target Team (not a pre-existing Admin); the creator is granted the Admin role on the new Board, effective immediately on subsequent requests since roles are read from stored membership (R1.1, R1.11, R1.12). `GET /api/boards` returns only Boards the caller is a member of, active unless `?archived` is supplied, in which case only archived Boards where the caller is Admin (R1.13). `PATCH` accepts any subset of `{name, description, visibility}`; omitted fields are left unchanged; any invalid supplied field rejects the whole request atomically (R1.3, R1.10). `visibility` is stored but has no access effect in V1 (R1.14). Non-Admins are rejected with an authorization error and no change (R1.7).
 
 ### Column_Service (R2)
 
@@ -295,33 +334,33 @@ Reorder body: `{ "targetIndex": int }`; out-of-range index rejected (R2.7). Dele
 
 | Method | Path | Min Role | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| POST | `/api/columns/{columnId}/cards` | Member+ | Create, append at end | R3.1, R3.2, R3.7 |
-| GET | `/api/cards/{cardId}` | Member+/Guest(read) | Fetch card incl. `version` | R13.1 |
-| PATCH | `/api/cards/{cardId}` | Member+ | Atomic multi-field edit; requires `version` | R3.3, R3.4, R3.7, R3.8, R3.9, R3.10, R13 |
-| POST | `/api/cards/{cardId}/move` | Member+ | Move to target column + index, reindex | R4.1–R4.6 |
-| DELETE | `/api/cards/{cardId}` | Member+ | Delete + reindex column | R3.5, R3.9 |
+| POST | `/api/columns/{columnId}/cards` | Member/Admin | Create, append at end | R3.1, R3.2, R3.6, R3.7 |
+| GET | `/api/cards/{cardId}` | Member/Admin | Fetch card incl. `version` | R13.1 |
+| PATCH | `/api/cards/{cardId}` | Member/Admin | Atomic multi-field edit; requires `version` | R3.3, R3.4, R3.6, R3.7, R3.8, R3.9, R3.10, R13 |
+| POST | `/api/cards/{cardId}/move` | Member/Admin | Move to target column + index, reindex (no `version`) | R4.1, R4.2, R4.3, R4.4, R4.5, R4.6, R4.7 |
+| DELETE | `/api/cards/{cardId}` | Member/Admin | Delete + reindex column (`204`) | R3.5, R3.6, R3.9 |
 
-Move body: `{ "targetColumnId": id, "targetIndex": int }`. Validations: target column must be in same board (R4.4); target index integer in `[0, count]` (R4.5); Guests rejected (R4.6, R3.6). PATCH sets `updated_at` and bumps `version` (R3.3, R13.3).
+Move body: `{ "targetColumnId": id, "targetIndex": int }`. Validations: target column must be in the same board (R4.4); target index is an integer in `[0, count-in-target-after-removal]` (R4.5); Guests rejected (R4.6, R3.6). A move needs no `version` and never changes `version` (R13.6); it sets `updated_at` only on the moved Card, leaving reindex-shifted Cards' `updated_at` unchanged (R4.7). PATCH requires `version`, sets `updated_at`, and bumps `version` (R3.3, R13.3). Anonymous Guest card reads go through `/api/guest/<token>/board` (cards nested), not these authenticated routes.
 
 ### Comment_Service (R5, R13)
 
 | Method | Path | Min Role | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| GET | `/api/cards/{cardId}/comments` | Member+/Guest(read) | List comments (threaded) incl. `version` | R13.1 |
-| POST | `/api/cards/{cardId}/comments` | Member+ | Create top-level or reply (`parentCommentId`) | R5.1, R5.2, R5.7, R5.8 |
-| PATCH | `/api/comments/{commentId}` | Member+ (author) | Edit own; set `edited_at`, requires `version` | R5.3, R5.5, R5.7, R13 |
-| DELETE | `/api/comments/{commentId}` | Member+ (author) | Delete own + cascade replies | R5.4, R5.5 |
+| GET | `/api/cards/{cardId}/comments` | Member/Admin | List comments as a flat list with `parentCommentId`, oldest first, incl. `version` | R13.1 |
+| POST | `/api/cards/{cardId}/comments` | Member/Admin | Create top-level or reply (`parentCommentId`) | R5.1, R5.2, R5.6, R5.7, R5.8 |
+| PATCH | `/api/comments/{commentId}` | Member/Admin (author) | Edit own; set `edited_at`, requires `version` | R5.3, R5.5, R5.7, R13 |
+| DELETE | `/api/comments/{commentId}` | Member/Admin (author) | Delete own + cascade replies (`204`) | R5.4, R5.5, R5.6 |
 
-Reply with invalid/other-card parent rejected (R5.8). Editing/deleting another user's comment rejected with authorization error (R5.5). Guests rejected (R5.6). Creating a comment triggers mention parsing → Notification creation (R6.1) and an Activity_Entry (R8.4), in the same transaction.
+Comments are returned as a flat list carrying `parentCommentId` (the client builds the thread tree). Reply with an invalid/other-card parent rejected (R5.8). Editing/deleting another user's comment rejected with authorization error (R5.5). Guests rejected (R5.6). Comment delete needs no `version` (R13.6). Creating a comment parses Mentions (`@[<user-uuid>]` tokens) and, in the same transaction, creates exactly one Notification per distinct mentioned User who is a current Board Member (R6.1, R6.8) and an Activity_Entry (R8.4); an invalid or non-member mention never rejects the Comment.
 
 ### Notification_Service (R6)
 
 | Method | Path | Min Role | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| GET | `/api/notifications?cursor=&unreadOnly=` | authenticated (recipient) | Cursor-paginated newest-first, <=50/page | R6.2, R6.3, R6.4, R6.6, R6.7, R6.10 |
-| POST | `/api/notifications/{id}/read` | recipient | Mark as read | R6.5, R6.9 |
+| GET | `/api/notifications?cursor=&unreadOnly=` | authenticated (recipient) | Cursor-paginated newest-first, <=50/page; newest page requested without a cursor | R6.2, R6.3, R6.4, R6.6, R6.7, R6.10 |
+| POST | `/api/notifications/{notificationId}/read` | authenticated (recipient) | Mark as read | R6.5, R6.9 |
 
-Ordering: `created_at DESC, id DESC`. Without `cursor`, return newest page; with `cursor`, return items strictly after the decoded `(created_at, id)` position (R6.2, R6.3, R6.6, R6.7). `unreadOnly=true` applies the same pagination over unread items only (R6.4). Response includes `{ items: [...], nextCursor }`; `nextCursor` encodes the last item's `(created_at, id)`. A malformed/invalid cursor yields a validation error and no items (R6.10). Marking a notification not addressed to the caller yields an authorization error, status unchanged (R6.9).
+Ordering: `created_at DESC, id DESC`. The frontend polls the newest page **without** a cursor; the cursor is used only to load older pages on demand (R6.2, R6.6). With `cursor`, return items strictly after the decoded `(created_at, id)` position (R6.3, R6.7). `unreadOnly=true` applies the same pagination over unread items only (R6.4). The response is unwrapped as `{ items: [...], nextCursor }`; `nextCursor` encodes the last item's `(created_at, id)`. A malformed/invalid cursor yields a validation error and no items (R6.10). Marking a notification not addressed to the caller yields an authorization error, status unchanged (R6.9). Mention Notifications are created on Comment creation (R6.1, R6.8), not through these endpoints.
 
 ### Search_Service (R7)
 
@@ -329,15 +368,15 @@ Ordering: `created_at DESC, id DESC`. Without `cursor`, return newest page; with
 | --- | --- | --- | --- | --- |
 | GET | `/api/search/cards?q=` | authenticated | Case-insensitive title substring over accessible boards | R7.1–R7.6 |
 
-`q` must be 1–100 chars, non-whitespace-only; otherwise validation error and no results (R7.5). Results restricted to boards the caller can access (R7.3), each result includes its Board and Column (R7.2), ordered by `updated_at DESC, id DESC`, capped at 100 (R7.6). No matches → empty set (R7.4).
+`q` must be 1–100 chars, non-whitespace-only; otherwise validation error and no results (R7.5). Before the case-insensitive `ILIKE`, the service escapes `%`, `_`, and `\` in the keyword so it matches as a literal substring (R7.1). Results restricted to boards the caller can access (R7.3), each result includes its Board and Column (R7.2), ordered by `updated_at DESC, id DESC`, capped at 100 (R7.6). No matches → empty set (R7.4). Guests have no search access.
 
 ### Activity_Service (R8)
 
 | Method | Path | Min Role | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| GET | `/api/boards/{boardId}/activity?page=` | Member+/Guest(with active link) | Paged activity, newest first, <=100/page | R8.12, R8.13, R8.14, R8.15 |
+| GET | `/api/boards/{boardId}/activity?page=` | Member/Admin | Paged activity, newest first, <=100/page | R8.12, R8.13, R8.14, R8.15 |
 
-Ordering `created_at DESC, id DESC`, 100 per page (R8.12). Each entry includes event type, timestamp, actor identity, affected resource id (R8.13). A page index that is negative or beyond the last page returns an empty page (R8.15). Callers with no role and no active invitation link are rejected (R8.14). Activity writing is performed internally by the triggering services (R8.1–R8.11).
+Ordering `created_at DESC, id DESC`, 100 per page (R8.12). Each entry includes event type, timestamp, actor identity, affected resource id (R8.13). A page index that is negative or beyond the last page returns an empty page (R8.15). Activity is readable only by Members and Admins; Guests are rejected, as are callers with no role (R8.14). Activity writing is performed internally by the triggering services in the same transaction (R8.1–R8.11).
 
 ### Analytics_Service (R9)
 
@@ -351,41 +390,69 @@ Response: `{ totalCards, perColumn: [{columnId, count}], completionRate, activit
 
 | Method | Path | Min Role | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
-| POST | `/api/boards/{boardId}/members` | Admin | Invite user with role member/admin | R10.1, R10.4, R10.5, R10.7 |
-| PATCH | `/api/boards/{boardId}/members/{userId}` | Admin | Change role (effective after token refresh) | R10.3, R10.6, R10.7 |
-| DELETE | `/api/boards/{boardId}/members/{userId}` | Admin | Remove member | R10.2, R10.6, R10.7 |
+| GET | `/api/boards/{boardId}/members` | Member/Admin | List members `{ items: [{ userId, displayName, role }] }` | R10.9 |
+| POST | `/api/boards/{boardId}/members` | Admin | Add member `{ userId, role }` (must be a Team_Member of the Board's Team) | R10.1, R10.4, R10.5, R10.7, R10.8 |
+| PATCH | `/api/boards/{boardId}/members/{userId}` | Admin | Change role (effective on the member's next request) | R10.3, R10.6, R10.7 |
+| DELETE | `/api/boards/{boardId}/members/{userId}` | Admin | Remove member (`204`) | R10.2, R10.6, R10.7 |
+| GET | `/api/boards/{boardId}/invitations` | Admin | List Invitation_Links `{ token, status, createdAt }` | R11.9, R11.7 |
 | POST | `/api/boards/{boardId}/invitations` | Admin | Generate invitation link | R11.1, R11.7 |
 | POST | `/api/invitations/{token}/revoke` | Admin | Revoke link (set inactive) | R11.2, R11.7 |
 
-Invite with role other than member/admin → validation error (R10.4); inviting an existing member → validation error (R10.5). Any removal/role-change that would leave zero Admins → validation error (R10.6). Non-Admins rejected (R10.7, R11.7). Member grant records a "member joined" activity (R8.10); removal records "member removed" (R8.11).
+`POST members` takes `{ userId, role }`; the target `userId` must be a Team_Member of the Board's Team (else validation error, R10.8). Invite with a role other than member/admin → validation error (R10.4); adding an existing member → validation error (R10.5). Any removal/role-change that would leave zero Admins → validation error (R10.6). Non-Admins rejected (R10.7, R11.7). A member grant records a "member joined" activity (R8.10); removal records "member removed" (R8.11). Because roles come from stored `BoardMembership`, a role change or removal applies on the member's next request without a token refresh (R10.2, R10.3).
+
+### Team_Service (R16, R17)
+
+| Method | Path | Min Role | Purpose | Requirements |
+| --- | --- | --- | --- | --- |
+| POST | `/api/teams` | authenticated | Create Team; creator becomes `team_admin` (`201`) | R16.1, R16.2 |
+| GET | `/api/teams` | authenticated | List the caller's Teams `{ items }` incl. `currentUserTeamRole` | R16.3, R16.6 |
+| GET | `/api/teams/{teamId}/members` | Team_Member | List members `{ items: [{ userId, displayName, teamRole }] }` | R16.4, R16.5 |
+| POST | `/api/teams/{teamId}/join-links` | Team_Admin | Generate join link (`201`; `{ id, token, status, expiresAt }`) | R17.1, R17.6 |
+| GET | `/api/teams/{teamId}/join-links` | Team_Admin | List join links `{ token, status, expiresAt, createdAt }` | R17.9, R17.6 |
+| POST | `/api/team-join-links/{token}/revoke` | Team_Admin | Revoke join link (set inactive) | R17.2, R17.6 |
+| GET | `/api/team-join-links/{token}` | authenticated | Preview bound Team name `{ teamName }` | R17.8 |
+| POST | `/api/team-join-links/{token}/accept` | authenticated | Join bound Team as `team_regular` → `{ teamId }` | R17.3, R17.4, R17.5, R17.7 |
+
+Any authenticated User creates a Team and becomes its `team_admin` (R16.1). `GET /api/teams` and `GET /api/teams/{teamId}/members` are restricted to Team_Members; a non-member requesting members is rejected with an authorization error (R16.5). Team_Role comes from stored `TeamMembership` on every request (R16.6). Only a Team_Admin may generate, list, or revoke join links (R17.6). An unknown, inactive, or expired token on `accept` or `preview` yields a single generic validation error that the Team_Join_Link is invalid (R17.4, R17.8); a User already a member of the bound Team is rejected with a validation error (R17.5). Acceptance is effective on the User's next request (R17.3); an unauthenticated accept is rejected with an authentication error (R17.7). Expiry is computed from `expires_at` at read time (R17.1). V1 has no Team remove, leave, role change, rename, or delete.
+
+### Access_Control_Service: Guest Access (R11)
+
+Anonymous, read-only Guest endpoints live under `/api/guest/<token>/...`, accept **GET only**, and need no authentication:
+
+| Method | Path | Auth | Purpose | Requirements |
+| --- | --- | --- | --- | --- |
+| GET | `/api/guest/{token}/board` | none (token) | Board `{ id, name, description, currentUserRole: "guest" }` with Columns and Cards nested | R11.3 |
+| GET | `/api/guest/{token}/cards/{cardId}/comments` | none (token) | Flat Comment list with `parentCommentId`, oldest first | R11.3 |
+
+One function resolves the token to its Board and raises `AuthorizationError` for an unknown, inactive, or revoked token, and for a token whose Board is archived (R11.5, R11.6, R11.8). A `cardId` outside the token's Board raises `NotFoundError`. Any non-GET method on a `/api/guest/` route returns `403 AuthorizationError` (not `405`) (R11.4). Guest responses never include emails, `version`, or Activity data; Users appear only as `{ id, displayName }`. Guests cannot see Activity, search, notifications, or analytics (R8.14).
 
 ## Authentication & Authorization
 
 ### Session / Token Model (R15, R10.3)
 
-On successful login the Authentication_Service issues a short-lived **Access_Token** — a JSON Web Token (JWT) containing the user id, issue/expiry timestamps, and the user's **Board role claims** — together with a longer-lived **Refresh_Token** (R15.2). The access token is stateless (verified by signature); the refresh token is persisted hashed in the `RefreshToken` table to support revocation.
+Registration creates an account only and does not log the User in (no tokens issued). On successful login the Authentication_Service issues a short-lived **Access_Token** — a JSON Web Token (JWT) containing the user id and issue/expiry timestamps, carrying **identity only with no role or Team claims** (R15.13) — together with a longer-lived **Refresh_Token** (R15.2). Both are set as `HttpOnly` cookies (`SameSite=Lax`, no `Domain`, `Secure` from `COOKIE_SECURE`); the refresh cookie is scoped to `/api/auth/refresh` and `/api/auth/logout`. Tokens never appear in response bodies, URLs, or browser storage. Login returns the user identity in the body. The access token is stateless (verified by signature); the refresh token is persisted hashed in the `RefreshToken` table to support revocation.
 
 Each request:
 
-1. Validates the JWT access token's signature and expiry → reject with an authentication error before any role evaluation if the access token is missing, expired, or invalid (R15.9, R15.10, R12.6).
-2. Reads the role claims embedded in the validated JWT for authorization decisions on this request (R12, R10.3).
+1. Reads the Access_Token from its cookie and validates its signature and expiry → reject with an authentication error before any role evaluation if the access token is missing, expired, or invalid (R15.9, R15.10, R12.6).
+2. Resolves authorization from stored membership — `BoardMembership` for Board operations, `TeamMembership` for Team operations — read fresh on this request (R12.1, R16.6). The token contributes identity only.
 
-**Logout** revokes the Refresh_Token (the stored refresh-token record is marked `revoked = true`, i.e., added to the server-side revocation list), so no new Access_Token can be minted from it; the short-lived access token is not stored and simply expires on its own (R15.8).
+**Logout** is authenticated by the refresh cookie. It marks the stored refresh-token record `revoked = true` so no new Access_Token can be minted from it, and clears both cookies; the short-lived access token is not stored and simply expires on its own (R15.8).
 
-**Token refresh:** a valid, non-revoked, non-expired Refresh_Token yields a new Access_Token whose role claims are current as of the time the new token is issued (R15.11, R15.13). A revoked, expired, or invalid Refresh_Token is rejected with an authentication error and no token is issued (R15.12).
+**Token refresh** is authenticated by the refresh cookie: a valid, non-revoked, non-expired Refresh_Token yields a new Access_Token (identity only) and refreshes the access cookie (R15.11, R15.13). A revoked, expired, or invalid Refresh_Token is rejected with an authentication error and no token is issued (R15.12).
 
 **Account lockout.** The Authentication_Service tracks the number of *consecutive* failed login attempts per account (`User.failed_login_attempts`). The lockout is per account and based strictly on consecutive failures. When a login attempt is the third consecutive failure for that account, the account is locked for 15 minutes starting at the moment of that third failure (`locked_until = now + 15 minutes`) (R15.4). While `locked_until` is set and in the future, every login attempt for that account is rejected with the same generic authentication error used for ordinary invalid credentials and no Access_Token or Refresh_Token is issued — even when the submitted credentials are correct — and the error never discloses that the account is locked (R15.5, consistent with the non-disclosure rule R15.3). A successful login resets the consecutive-failure counter to zero and clears `locked_until` (R15.6). Once the 15-minute window has elapsed (`locked_until` is no longer in the future), login attempts are accepted again and the consecutive-failure counter is reset to zero (R15.7).
 
-Because role claims live in the access token, an Admin changing a Member's role updates the stored `BoardMembership`, but the affected Member keeps their old permissions until their access token is refreshed or re-issued (which re-reads `BoardMembership` to build fresh claims); in-flight and already-authenticated requests are unaffected (R10.3).
+Because roles are read from stored membership on every request rather than from the token, an Admin changing a Member's role (or removing a Member) updates the stored `BoardMembership`, and the change applies to the affected User's very next request — no token refresh or re-issue is needed (R10.2, R10.3, R12.1). The same holds for Team_Role and Team membership via `TeamMembership` (R16.6, R17.3).
 
-Passwords are verified against the stored hash (R15.1). Registration validates email format and password length (R15.14, R15.16) and rejects duplicate emails via the unique constraint (R15.15).
+Passwords are hashed and verified with argon2 (R15.1). Registration validates email format, password length (>= 8), and display name (1–50 chars after trimming) (R15.14, R15.16) and rejects duplicate emails via the unique constraint (R15.15).
 
 ### RBAC Enforcement Flow (R12)
 
-The Access_Control_Service maps each operation to a minimum capability and evaluates it against the caller's effective role on the target Board:
+The Access_Control_Service maps each operation to a minimum capability and evaluates it against the caller's role read from stored `BoardMembership` on the target Board at request time (R12.1):
 
-- **Unauthenticated** → authentication error before any role check (R12.6).
-- **Guest** (active Invitation_Link only): read Columns/Cards/Comments; all create/edit/delete/move/reorder rejected with authorization error, board unchanged (R11.3, R11.4, R12.2).
+- **Unauthenticated** (on a non-Guest route) → authentication error before any role check (R12.6).
+- **Guest** (anonymous, via an active Invitation_Link on the `/api/guest/*` routes only): read the Board, its Columns and Cards, and a Card's Comments; every write is rejected, and any non-GET method on a Guest route returns `403` (R11.3, R11.4, R12.2). Guests cannot read Activity, search, notifications, or analytics (R8.14).
 - **Member**: Card ops, Comment ops, search, notifications, analytics; Column/member/settings/lifecycle rejected (R12.3).
 - **Admin**: all Member ops plus Column management, member management, Board settings and lifecycle (R12.4).
 - **No role and no active link** on the referenced Board → authorization error, board unchanged (R12.5, R8.14).
@@ -403,7 +470,7 @@ Capability matrix:
 
 ### Invitation Link / Guest Access (R11)
 
-An Admin generates an Invitation_Link bound to one Board, returned as a unique token (R11.1). A request presenting the token is authorized as Guest (read-only) iff the link exists and is `active` (R11.3). Inactive link → authorization error (R11.5); unknown token → authorization error (R11.6). Revocation sets only that link to `inactive` (R11.2). Guests attempting any write are rejected with the affected resource unchanged (R11.4).
+An Admin generates an Invitation_Link bound to one Board, returned as a unique token (R11.1). A request to a `/api/guest/<token>/...` route is authorized as an anonymous Guest (read-only) iff the link exists and is `active` (R11.3). Inactive link → authorization error (R11.5); unknown token → authorization error (R11.6); a token whose Board is archived → authorization error until the Board is restored (R11.8). Revocation sets only that link to `inactive` (R11.2). Any non-GET method on a Guest route returns `403`, not `405`, and Guests are rejected on any write with the affected resource unchanged (R11.4). Guest responses expose only `{ id, displayName }` for Users and never emails, `version`, or Activity.
 
 ## Key Behaviors and Invariants
 
@@ -423,7 +490,8 @@ Card/Comment updates require the expected `version`; mismatch or missing version
 
 ### Cascade and Empty-Before-Delete (R1, R2, R5)
 
-- Permanent board deletion cascades to Columns, Cards, Comments, and Activity_Entries (R1.6) via DB cascade/explicit transactional deletes.
+- Permanent board deletion cascades to its Columns, Cards, Comments, Notifications, Board memberships, Invitation_Links, and Activity_Entries (R1.6), declared with `ondelete="CASCADE"`. Teams cannot be archived or deleted in V1.
+- Archiving a Board makes its Invitation_Links reject Guests with `403` until the Board is restored; members still access it, and writes to an archived Board are not blocked in V1 (R1.4, R1.5, R11.8).
 - A Column can be deleted only when it has no Cards; otherwise a validation error, unchanged (R2.4).
 - Deleting a Comment removes it and all transitive replies (R5.4).
 
@@ -563,13 +631,13 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 ### Property 21: RBAC authorization decisions match the role capability matrix
 
-*For any* authenticated User, *any* Board role (Guest via active link, Member, Admin, or no role), and *any* operation, the authorization decision permits the operation if and only if the role's capability set includes it; denied write operations leave the referenced resource unchanged, and a User with no role and no active Invitation_Link on the Board is denied.
+*For any* authenticated User whose role is read from stored `BoardMembership`, *any* Board role (anonymous Guest via an active Invitation_Link, Member, Admin, or no role), and *any* operation, the authorization decision permits the operation if and only if the role's capability set includes it; denied write operations leave the referenced resource unchanged, and a User with no role and no active Invitation_Link on the Board is denied.
 
 **Validates: Requirements 1.7, 2.8, 3.6, 4.6, 5.5, 5.6, 8.14, 10.7, 11.4, 11.7, 12.1, 12.2, 12.3, 12.4, 12.5**
 
 ### Property 22: Authentication gate precedes authorization
 
-*For any* request lacking a valid, unexpired JWT access token, the request is rejected with an authentication error before any Board role is evaluated.
+*For any* request (other than a public or Guest-token route) lacking a valid, unexpired JWT access token in its cookie, the request is rejected with an authentication error before any Board role is evaluated.
 
 **Validates: Requirements 12.6, 15.9, 15.10**
 
@@ -579,11 +647,11 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 **Validates: Requirements 10.6**
 
-### Property 24: Role changes apply only to refreshed access tokens
+### Property 24: Role changes apply on the next request from stored membership
 
-*For any* role change on a Board, authorization decisions evaluated against the role claims of a JWT access token issued before the change use the old role, while decisions evaluated against an access token refreshed or re-issued after the change use the new role.
+*For any* role change or removal on a Board, because authorization is resolved from the stored `BoardMembership` on each request and the Access_Token carries identity only, every request the affected User makes after the change is decided under the new role (or denied if removed), with no token refresh or re-issue required.
 
-**Validates: Requirements 10.3**
+**Validates: Requirements 10.2, 10.3**
 
 ### Property 25: Invitation link generation, isolation, and access control
 
@@ -611,7 +679,7 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 ### Property 29: Refresh-token exchange and revocation
 
-*For any* refresh token, exchanging a valid, non-revoked, non-expired refresh token yields a new access token whose role claims reflect the user's current Board roles at issuance; a revoked, expired, or unknown refresh token yields an authentication error and no access token is issued.
+*For any* refresh token, exchanging a valid, non-revoked, non-expired refresh token yields a new identity-only access token (no role claims) and sets it in the access cookie; a revoked, expired, or unknown refresh token yields an authentication error and no access token is issued.
 
 **Validates: Requirements 15.11, 15.12, 15.13**
 
@@ -629,11 +697,15 @@ All domain services raise typed errors that a central Flask error handler maps t
 
 | Error type | HTTP | When | Example requirements |
 | --- | --- | --- | --- |
-| `AuthenticationError` | 401 | Missing/expired/invalid JWT access token; invalid login; login attempt against a locked account; revoked/expired/invalid refresh token on refresh | R12.6, R15.3, R15.5, R15.9, R15.10, R15.12 |
-| `AuthorizationError` | 403 | Role/invitation forbids operation | R1.7, R5.5, R10.7, R11.x, R12.x, R6.9 |
-| `ValidationError` | 400 | Invalid input (name/title/body/keyword/role/cursor), out-of-range index, invalid assignee, invalid parent | R1.8, R2.6/2.7, R3.7/3.8, R4.4/4.5, R5.7/5.8, R6.10, R7.5, R10.4/10.5, R15.14/15.16 |
-| `NotFoundError` | 404 | Referenced resource does not exist | R3.9 |
-| `ConflictError` | 409 | Version mismatch/missing; duplicate email; last-admin; already-member; not-archived restore | R13.2/13.5, R15.15, R10.6, R10.5, R1.9 |
+| `AuthenticationError` | 401 | Missing/expired/invalid access-token cookie; invalid login; login against a locked account; revoked/expired/invalid refresh token on refresh; unauthenticated Team_Join_Link accept | R12.6, R15.3, R15.5, R15.9, R15.10, R15.12, R17.7 |
+| `AuthorizationError` | 403 | Role/invitation forbids operation; inactive/unknown/archived-board Guest token; any non-GET on a Guest route | R1.7, R5.5, R6.9, R10.7, R11.4, R11.5, R11.6, R11.7, R11.8, R12.2, R12.3, R12.4, R12.5, R16.5, R17.6, R8.14 |
+| `ValidationError` | 400 | Invalid input (name/title/body/keyword/role/cursor), out-of-range index, invalid assignee, invalid parent, not-a-Team-member target, already-member, last-admin, not-archived restore, duplicate email, invalid Team/join-link | R1.8, R1.9, R2.6, R2.7, R3.7, R3.8, R4.4, R4.5, R5.7, R5.8, R6.10, R7.5, R10.4, R10.5, R10.6, R10.8, R15.14, R15.15, R15.16, R16.2, R17.4, R17.5 |
+| `NotFoundError` | 404 | Referenced resource does not exist (incl. a Card outside a Guest token's Board) | R3.9, R11.3 |
+| `ConflictError` | 409 | Version mismatch or missing version on a Card or Comment edit (only) | R13.2, R13.5 |
+
+Werkzeug `HTTPException`s (unknown URL `404`, bad method `405`, except Guest routes which return `403` for non-GET) map to the same envelope. Any unexpected exception maps to `500 { "error": { "code": "internal_error", "message": "Internal server error" } }` after the traceback is logged server-side. Every error handler rolls back the session. `code` values are snake_case constants in `exceptions.py`. Messages never reveal SQL, secrets, or whether an account exists or is locked (R15.3, R15.5).
+
+Note that duplicate email (R15.15), already-a-member (R10.5), last-admin (R10.6), and restore-of-non-archived (R1.9) are **validation** errors (`400`) per the requirements, not conflicts; `409 ConflictError` is reserved exclusively for optimistic-concurrency version failures on Card and Comment edits (R13).
 
 ### Atomicity and Rollback
 
@@ -642,20 +714,25 @@ Every mutating request runs in a single transaction. On any raised domain error 
 ### Validation Strategy
 
 - **Trimming and length:** Names/titles are trimmed before length checks; comment bodies are checked for non-whitespace content (R1.1, R2.1, R3.1, R5.1).
-- **Enums:** `visibility`, `status`, membership `role`, and `event_type` validated against allowed sets; invalid role on invite → `ValidationError` (R10.4).
+- **Marshmallow first:** request shape and format are validated by a module `schema.py` (inheriting `BaseSchema`, `unknown = RAISE`) via `load_schema`, which reports the first failing field. Rules needing the database (Assignee is a Board Member, target index in range, parent Comment on the same Card, target User is a Team_Member) run in the service before the first write.
+- **Enums:** `visibility`, `status`, Board `role`, Team `team_role`, link `status`, Notification `status`, and `event_type` validated against allowed sets; invalid role on invite → `ValidationError` (R10.4). Enum values are stored and sent exactly as defined (e.g. `team_admin`, `card_moved`); only JSON keys are camelCased.
 - **Indices:** Reorder/move target indices validated against current counts before mutation (R2.7, R4.5).
+- **Version:** a missing `version` on a Card/Comment edit is a `ConflictError` (R13.5); a present non-integer `version` is a `ValidationError`.
+- **Search keyword:** `%`, `_`, and `\` are escaped before the `ILIKE` so the keyword matches as a literal substring (R7.1).
 - **Cursor:** Decoded and structurally validated (timestamp + id). Malformed cursor → `ValidationError` and empty result (R6.10).
+- **Team/join-link:** an unknown, inactive, or expired Team_Join_Link gives one generic `ValidationError` on preview and accept (R17.4, R17.8).
 - **Not-found vs forbidden:** Existence checks occur after the authorization gate; read authorization failures return `AuthorizationError` rather than leaking existence.
 
 ### Security Considerations
 
-- Passwords hashed with bcrypt/argon2; never logged or returned (R15.1).
+- Passwords hashed with argon2 (`argon2-cffi`); never logged or returned (R15.1).
 - Generic login error prevents account enumeration (R15.3).
 - Account lockout mitigates brute-force and credential-stuffing attacks: 3 consecutive failed logins lock the account for 15 minutes, during which all login attempts fail; the generic authentication error avoids disclosing the locked state (R15.4, R15.5).
-- JWT access tokens are stateless and short-lived, verified by signature and expiry on every request (R15.9, R15.10).
+- JWT Access_Tokens are stateless, short-lived, carry identity only (no role claims, R15.13), and are verified by signature and expiry on every request (R15.9, R15.10).
+- Tokens live only in `HttpOnly` cookies (`SameSite=Lax`, no `Domain`, `Secure` via `COOKIE_SECURE`), never in response bodies, URLs, or browser storage; the refresh cookie is scoped to `/api/auth/refresh` and `/api/auth/logout`. State-changing requests never use GET (CSRF protection relies on `SameSite=Lax`). No CORS: the browser calls same-origin `/api/*`, proxied by Next.js.
 - Refresh tokens are stored hashed (never plaintext) and are revocable; logout marks the refresh token revoked so it can no longer mint access tokens (R15.8, R15.12).
-- Invitation tokens are high-entropy and only grant Guest read on their bound Board (R11).
-- Authorization decisions read the role claims embedded in the JWT access token, isolating in-flight requests from role changes until the access token is refreshed/re-issued (R10.3).
+- Invitation and Team_Join_Link tokens are high-entropy (`secrets.token_urlsafe`); Invitation tokens grant only anonymous Guest read on their bound Board (R11). Tokens that appear in URLs are never logged (the raw path, query string, cookies, bodies, and Comment text are not logged).
+- Authorization decisions are read from stored `BoardMembership`/`TeamMembership` on every request, so a role change or removal applies on the User's next request with no token refresh (R10.2, R10.3, R12.1, R16.6).
 
 ## Testing Strategy
 
@@ -664,22 +741,23 @@ Every mutating request runs in a single transaction. On any raised domain error 
 The feature is a stateful web application with substantial pure logic (ordering/reindexing, completion-rate arithmetic, cursor pagination, optimistic-concurrency version checks, RBAC decision function, validation, cascade computation). This pure logic is well suited to property-based testing, so the strategy combines:
 
 - **Property-based tests** for the universal properties in the Correctness Properties section — ordering contiguity, pagination completeness, analytics bounds, RBAC decisions, concurrency, validation, cascade.
-- **Example-based unit tests** for concrete scenarios and supporting criteria (default-column creation R1.2, archive/restore flows R1.4/1.5, mark-as-read R6.5, login issuing access+refresh tokens and logout revoking the refresh token R15.2/15.8, token refresh issuing a new access token R15.11, version present on retrieval R13.1/13.4).
-- **Edge-case unit tests** for specific error conditions (restore non-archived R1.9, not-found card R3.9, duplicate email R15.15, out-of-range activity page R8.15, unknown invitation token R11.6, mark others' notification R6.9).
+- **Example-based unit tests** for concrete scenarios and supporting criteria (default-column creation R1.2, archive/restore flows R1.4/1.5, mark-as-read R6.5, login setting both auth cookies and returning identity and logout revoking the refresh token and clearing cookies R15.2/15.8, token refresh issuing a new identity-only access token R15.11, version present on retrieval R13.1/13.4, Team creation making the creator `team_admin` R16.1, Team_Join_Link accept R17.3).
+- **Edge-case unit tests** for specific error conditions (restore non-archived R1.9, not-found card R3.9, duplicate email R15.15, out-of-range activity page R8.15, unknown invitation token R11.6, mark others' notification R6.9, expired Team_Join_Link R17.4, non-member Team members request R16.5, non-GET on a Guest route R11.4).
 - **Integration tests** for non-functional and infrastructure concerns: performance/p95 under load (R14.1), availability health-check (R14.2), responsive layout at/below 1024px (R14.3/14.4), and real concurrent-writer no-lost-update behavior (R14.5), plus account-lockout flows — locking after 3 consecutive failed logins and unlocking after the 15-minute window (R15.4–R15.7); the time-based unlock (R15.7) is validated with a controllable/injected clock — plus end-to-end API wiring through the auth and RBAC gates.
+- **Frontend (Playwright E2E)** is the primary frontend test type, covering the main user flows: auth, Team and join-link flows, Board/Column/Card CRUD, drag-and-drop, comments and mentions, search, and anonymous Guest access via an Invitation_Link. Tests live in `frontend/e2e/<flow>.spec.ts`, are mutually independent, and use accessible locators.
 
 ### Property-Based Testing Setup
 
 - **Backend (Python/Flask):** use `hypothesis` for property-based tests against the pure domain logic (ordering helpers, analytics computation, cursor codec, RBAC decision function, validation, version checks). Do not implement a PBT framework from scratch.
-- **Frontend (TypeScript):** use `fast-check` for any client-side pure logic that warrants it (e.g., drag target-index computation), though most properties live in the backend domain layer.
-- **Configuration:** every property-based test runs a minimum of 100 generated cases (`@given` with `settings(max_examples=100)` in Hypothesis; `{ numRuns: 100 }` in fast-check).
+- **Pure logic is kept side-effect-free** (ordering/reindexing, cursor codec, the RBAC role-decision function, analytics math) so it can be property-tested without the database.
+- **Configuration:** every property-based test runs a minimum of 100 generated cases (`@given` with `settings(max_examples=100)` in Hypothesis).
 - **Traceability tag:** each property test includes a comment tagging it to the design property, in the format:
   `# Feature: task-management-app, Property {number}: {property_text}`
 
-Each of the 30 correctness properties is implemented by a single property-based test. Generators model the relevant domain objects (boards, columns with cards, comment trees, mention multisets, notification sets with timestamps, membership/role sets, version sequences) and include edge cases (empty collections, whitespace-only strings, non-ASCII, boundary lengths, duplicate mentions, equal timestamps for tie-break coverage).
+Each of the 30 correctness properties is implemented by a single backend property-based test. Generators model the relevant domain objects (boards, columns with cards, comment trees, mention multisets, notification sets with timestamps, membership/role sets, version sequences) and include edge cases (empty collections, whitespace-only strings, non-ASCII, boundary lengths, duplicate mentions, equal timestamps for tie-break coverage).
 
 ### Example and Integration Coverage Notes
 
-- Database-backed tests run against a transactional test PostgreSQL (or a disposable schema) with rollback per test to keep them fast and isolated.
+- Database-backed tests run against a transactional test PostgreSQL with rollback per test to keep them fast and isolated. Playwright E2E tests run against a dedicated, seeded test database.
 - Pure-logic properties are tested without the database where possible by extracting ordering/analytics/cursor/RBAC logic into side-effect-free functions.
-- Load and responsive tests (R14) are explicitly out of the property-based scope and are validated by integration/performance and visual-regression tooling.
+- Load and responsive tests (R14) are explicitly out of the property-based scope and are validated by integration/performance and Playwright tooling.

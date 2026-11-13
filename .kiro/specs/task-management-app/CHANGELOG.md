@@ -2,6 +2,29 @@
 
 All notable changes to the task-management-app spec are documented here. Versions are ordered newest-first. The version is bumped each time a spec document (requirements.md, design.md, or tasks.md) is changed.
 
+## v12 - 2026-11-13 - Design aligned to identity-only cookie auth, Teams, Guest endpoints, and API conventions
+
+### Changes
+Design-only revision (design.md). requirements.md and the steering files were not modified. Existing property numbers and R{n}.{m} references were preserved; only the Correctness Properties listed below were edited.
+
+- **Technology Stack / Topology / Design Goals:** pinned Python 3.14, argon2 (`argon2-cffi`), Marshmallow input validation, `@dnd-kit/core` + `@dnd-kit/sortable`, `frontend/src/`, `backend/flask_app/` (routes.py + schema.py + service.py per module, plus a `teams/` module), Supabase/Render/Vercel deployment, same-origin `/api/*` with no CORS, and the public `GET /api/health` note.
+- **Auth model (identity-only cookies):** Access_Token (15 min) and Refresh_Token (7 days) now carry identity only (no role or Team claims, R15.13) and travel in `HttpOnly` cookies (`SameSite=Lax`, `Secure` via `COOKIE_SECURE`, refresh cookie scoped to `/api/auth/refresh` and `/api/auth/logout`). Login sets both cookies and returns identity; registration creates an account only (no auto-login); logout is authenticated by the refresh cookie, clears both cookies, and revokes the refresh token.
+- **Roles from stored membership:** Request Flow, RBAC Enforcement, and the role paragraph now resolve roles from stored `BoardMembership`/`TeamMembership` on every request; a role change or removal applies on the next request with no token refresh. Board responses carry `currentUserRole`; Team responses carry `currentUserTeamRole`; `GET /api/auth/me` returns identity only.
+- **Service responsibilities / layering:** added Team_Service (`teams/`) and the Guest-route split in `access/`; documented `@token_required`, `@require_role('member'|'admin')`, Marshmallow + `load_schema`, and `read_json`/`read_query`/`json_response` as cross-cutting interfaces; updated the backend tree and `common/` files.
+- **Data Models:** added TeamMembership `team_role`, Team creator = `team_admin`, and a new TeamJoinLink entity (7-day expiry computed at read time); `BaseModel` four-column shape; Card `updated_at` no-`onupdate` exception; deferrable order-index uniqueness; hard deletes; RefreshToken hashed; enum string values fixed to stored form; Board-delete cascade list expanded.
+- **API Design:** added common conventions (camelCase keys only, unwrapped responses, `DELETE` 204, no `If-Match`, UUID/ISO-8601, public-endpoint list, server-enforced pagination, role fields). Added Team_Service endpoints (R16, R17), Guest endpoints under `/api/guest/{token}/...` (GET only), `GET /api/boards/{boardId}/members`, `GET /api/boards/{boardId}/invitations`, and `POST /api/boards/{boardId}/members` with the Team-member check. Every endpoint row is tagged with the requirement numbers it satisfies.
+- **Error Handling:** `ConflictError` (409) restricted to Card/Comment version conflicts only; duplicate email, already-member, last-admin, and restore-of-non-archived moved to `ValidationError` (400); added Team/join-link validation rows, Guest-route `403`-on-non-GET, Werkzeug `HTTPException` mapping, and the `500 internal_error` fallback. Added search `%`/`_`/`\` escaping and the cookie/logging security notes.
+- **Correctness Properties:** edited only Property 21 (role read from stored membership; anonymous Guest), Property 22 (token in cookie; public/Guest routes exempt), Property 24 (renamed/rewritten: role changes apply on the next request from stored membership; now Validates 10.2, 10.3), and Property 29 (refresh yields an identity-only access token, no role claims). Total remains 30.
+- **Testing Strategy:** removed `fast-check`; Playwright E2E is the sole frontend test type (added Team/join and Guest flows); updated auth example-test wording to cookies/identity-only and added Team and Guest edge cases.
+
+### Reason
+Bring design.md into agreement with the finalized DECISIONS and requirements.md (notably R15.13 identity-only tokens, R16/R17 Teams and Team_Join_Links, anonymous Guest endpoints, and the API/convention rules in the steering files). The previous design still described a JWT-embedded-role-claims model that contradicted R10.3/R12.1 and R15.13.
+
+### Impact
+- Affected requirements: alignment across R1, R3, R4, R5, R6, R7, R8, R10, R11, R12, R13, R15, R16, R17 (no requirement text changed).
+- Affected design components: Technology Stack, Design Goals, Topology, Request Flow, Service Responsibilities, Backend Layering, Cross-Cutting Interfaces, Frontend Structure, Data Models, Version/Concurrency, API Design (all service tables), Authentication & Authorization, Key Behaviors (cascade/archive), Correctness Properties 21/22/24/29, Error Handling, Testing Strategy.
+- Affected implementation tasks: none yet (tasks.md not created).
+
 ## v11 - Account lockout after failed logins
 - Req 15 (requirements.md): added account lockout — three consecutive failed login attempts lock an account for 15 minutes (Req 15.4); while locked, all login attempts are rejected with the generic authentication error and no tokens are issued even with correct credentials, without disclosing the locked state (Req 15.5); a successful login resets the consecutive-failure count (Req 15.6); the count resets and logins resume after the 15-minute window elapses (Req 15.7).
 - Req 15 renumbering: inserting the four lockout criteria shifted later criteria — logout is now 15.8, unauthenticated-access 15.9, expired/invalid access token 15.10, refresh success 15.11, refresh failure 15.12, role-claim embedding 15.13, registration validation 15.14/15.16, duplicate-email 15.15.
