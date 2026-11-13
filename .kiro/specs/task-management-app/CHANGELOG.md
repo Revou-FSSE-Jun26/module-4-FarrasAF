@@ -2,6 +2,26 @@
 
 All notable changes to the task-management-app spec are documented here. Versions are ordered newest-first. The version is bumped each time a spec document (requirements.md, design.md, or tasks.md) is changed.
 
+## v16 - 2026-11-13 - Property 33, version endpoint tags, link schema note, and BaseModel field cleanup
+
+### Changes
+Design-only revision (design.md). requirements.md, tasks.md, and the steering files were not modified. No property or endpoint row was renumbered; only Property 33 was edited in the Correctness Properties section.
+
+- **Property 33:** added that a Board invitation specifying a role other than member or admin is rejected with a validation error and Board membership is unchanged; added R10.4 to its Validates line (now 10.1, 10.4, 10.5, 10.8).
+- **Endpoint tags:** added R13.6 to the `POST /api/cards/{cardId}/move`, `DELETE /api/cards/{cardId}`, and `DELETE /api/comments/{commentId}` rows (these operations require no `version`).
+- **Team_Service:** stated that the join-link create, list, and revoke responses all use the `TeamJoinLink` schema, which includes the server-derived `isExpired` field (computed at read time from `expiresAt`, never stored) alongside `id`, `teamId`, `token`, `status`, `expiresAt`, and `createdAt`.
+- **Data Models intro:** stated once that every entity inherits `BaseModel` (id, created_at, updated_at, deleted_at) and that each entity description lists only entity-specific fields; added that `updated_at` and `deleted_at` are not exposed in any response schema except Card's `updatedAt`. Removed the per-entity repetition of the `BaseModel` columns while keeping the Card `updated_at` no-`onupdate` exception (set explicitly) and clarifying Comment's `edited_at` as the user-facing edit timestamp (null until the first edit, set explicitly on edit).
+- **Version-checked updates:** stated that a Card edit's conditional `UPDATE` sets `updated_at` and increments `version` explicitly, and a Comment edit's conditional `UPDATE` sets `edited_at` and increments `version` explicitly.
+- **API Response Schemas — Team and Board:** removed `updatedAt` from the `Team` and `Board` response shapes so that Card's `updatedAt` is the only base timestamp exposed in any response schema, consistent with the Data Models intro statement above (contract change; `createdAt` is retained on both shapes).
+
+### Reason
+Tighten the design to match the finalized DECISIONS: make the R10.4 invalid-role rejection explicit in Property 33, tag the no-version operations with R13.6, remove the duplicated base-column lists in Data Models in favor of a single BaseModel statement, and pin how the version-checked `UPDATE` sets the edit timestamp and bumps `version` for Card and Comment. The `Team`/`Board` `updatedAt` removal resolves an internal contradiction introduced by the Data Models intro statement (updated_at is not exposed in any response schema except Card's `updatedAt`); the two remaining `updatedAt` fields were leftovers and `updated_at` is an internal column, not part of the client contract.
+
+### Impact
+- Affected requirements: none (no requirement text changed; refines coverage of R3.3, R4.7, R5.3, R10.4, R13.3, R13.6 and DECISIONS 6, 7, 16).
+- Affected design components: Correctness Properties (Property 33), Card_Service and Comment_Service endpoint tables, Team_Service endpoint description, Data Models (intro and all entity field lists), the Version Identifiers and Optimistic Concurrency subsection, and the API Response Schemas `Team` and `Board` shapes.
+- Affected implementation tasks: none (tasks.md not created). When the frontend `types/api.ts` is written, the `Team` and `Board` types must omit `updatedAt`.
+
 ## v15 - 2026-11-13 - Activity pagination, link schemas, and link-row references refined
 
 ### Changes

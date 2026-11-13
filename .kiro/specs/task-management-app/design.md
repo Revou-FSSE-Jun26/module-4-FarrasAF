@@ -196,7 +196,7 @@ All application code lives under `frontend/src/` (`app/` for App Router pages, `
 
 ## Data Models
 
-Every model inherits `BaseModel`, which defines exactly four columns: `id` (UUID v4 primary key), `created_at`, `updated_at`, and `deleted_at` (all timezone-aware UTC via `utc_now()`). `deleted_at` exists by project convention but is unused in V1 (all deletes are hard deletes; it stays NULL and no query filters on it). Enum-like values are stored as `String(50)` plus a `CheckConstraint`. `Card` and `Comment` carry a `version` integer used for optimistic concurrency (R13). `Card` is the one exception to `BaseModel`: it defines its own `updated_at` with `default=utc_now` and **no** `onupdate`, so reindexing never bumps a shifted Card's `updated_at`; `Card_Service` sets it explicitly (R3.1, R3.3, R4.7). Relationships are declared on both sides with `back_populates` and an explicit `lazy`. Order-position uniqueness — `(board_id, order_index)` for Columns and `(column_id, order_index)` for Cards — is `DEFERRABLE INITIALLY DEFERRED` so a single-transaction reindex is not rejected mid-statement.
+Every entity inherits `BaseModel`, which defines exactly four columns: `id` (UUID v4 primary key), `created_at`, `updated_at`, and `deleted_at` (all timezone-aware UTC via `utc_now()`). Because every entity has these four columns, each entity description below lists only the entity-specific fields and does not repeat the `BaseModel` columns. `deleted_at` exists by project convention but is unused in V1 (all deletes are hard deletes; it stays NULL and no query filters on it). `updated_at` and `deleted_at` are not exposed in any response schema, the one exception being Card's `updatedAt`. Enum-like values are stored as `String(50)` plus a `CheckConstraint`. `Card` and `Comment` carry a `version` integer used for optimistic concurrency (R13). `Card` is the one exception to `BaseModel`: it defines its own `updated_at` with `default=utc_now` and **no** `onupdate`, so reindexing never bumps a shifted Card's `updated_at`; `Card_Service` sets it explicitly (R3.1, R3.3, R4.7). Relationships are declared on both sides with `back_populates` and an explicit `lazy`. Order-position uniqueness — `(board_id, order_index)` for Columns and `(column_id, order_index)` for Cards — is `DEFERRABLE INITIALLY DEFERRED` so a single-transaction reindex is not rejected mid-statement.
 
 ```mermaid
 erDiagram
@@ -223,59 +223,59 @@ erDiagram
 ### Entities
 
 **User** — registered account.
-- `id`, `email` (unique, lowercased), `password_hash` (argon2), `display_name` (1–50 chars trimmed, R15.14), plus `BaseModel` columns.
+- `email` (unique, lowercased), `password_hash` (argon2), `display_name` (1–50 chars trimmed, R15.14).
 - `failed_login_attempts` (int, default `0`) — count of consecutive failed login attempts for the account; incremented on each failed login and reset to zero on a successful login (R15.4, R15.6).
 - `locked_until` (timestamp, nullable, UTC) — when set and in the future, the account is locked and all login attempts are rejected; cleared on a successful login and effectively lifted once the timestamp has elapsed (R15.4, R15.5, R15.7).
 - Unique constraint on `email` enforces R15.15. Password stored only as hash (R15.1).
 - Lockout tracking: a failed login increments `failed_login_attempts` and, when the counter reaches 3, sets `locked_until = now + 15 minutes` (R15.4). A successful login sets `failed_login_attempts = 0` and clears `locked_until` (R15.6). Login handling treats an account as locked whenever `locked_until` is set and greater than the current time; once that window elapses, login is accepted again and the counter resets to zero (R15.5, R15.7).
 
 **RefreshToken** — issued refresh credential enabling access-token minting.
-- `id`, `user_id` (FK), `token_hash` (unique; the refresh token stored hashed with `secrets.token_urlsafe` entropy, never plaintext), `expires_at`, `revoked` (bool, default `false`), plus the `BaseModel` columns (`created_at` is the issue time).
+- `user_id` (FK), `token_hash` (unique; the refresh token stored hashed with `secrets.token_urlsafe` entropy, never plaintext), `expires_at`, `revoked` (bool, default `false`). The inherited `created_at` is the issue time.
 - Logout sets `revoked = true` (R15.8). Refresh validates the token exists, is not revoked, and not expired (R15.11, R15.12).
 - JWT Access_Tokens are stateless, carry identity only (no role claims, R15.13), and are not stored; only refresh tokens are persisted (hashed) to support revocation. Both tokens travel only in `HttpOnly` cookies.
 
 **Team** — owns Boards.
-- `id`, `name` (1–100 chars trimmed), plus `BaseModel` columns (R16.1, R16.2).
+- `name` (1–100 chars trimmed) (R16.1, R16.2).
 - Created by any authenticated User; the creator becomes a Team_Member with Team_Role `team_admin` (R16.1). Teams cannot be renamed, archived, or deleted in V1.
 
 **TeamMembership** — User-in-Team join (Team_Role source of truth).
-- `id`, `team_id` (FK), `user_id` (FK), `team_role` (enum: `team_admin` | `team_regular`), plus `BaseModel` columns. Unique `(team_id, user_id)`.
+- `team_id` (FK), `user_id` (FK), `team_role` (enum: `team_admin` | `team_regular`). Unique `(team_id, user_id)`.
 - Team_Role is resolved from this table on every request (R16.6). V1 has no leave, remove, or role-change for Teams.
 
 **TeamJoinLink** — shareable token that lets an authenticated User join a Team.
-- `id`, `team_id` (FK), `token` (unique, high-entropy via `secrets.token_urlsafe`), `status` (enum: `active` | `inactive`, default `active`), `expires_at` (creation time + 7 days), `created_by_id` (FK User), plus `BaseModel` columns.
+- `team_id` (FK), `token` (unique, high-entropy via `secrets.token_urlsafe`), `status` (enum: `active` | `inactive`, default `active`), `expires_at` (creation time + 7 days), `created_by_id` (FK User).
 - Revocation flips only this link's `status` to `inactive` (R17.2). Validity is computed from `expires_at` at read time (expired links are rejected even though the stored `status` stays `active`; there is no background job) (R17.1, R17.4). Accepting an active, unexpired link makes the User a `team_regular` member of the bound Team (R17.3).
 
 **Board** — workspace belonging to a Team.
-- `id`, `team_id` (FK), `name` (1–100 chars trimmed), `description` (0–2000 chars, default ""), `visibility` (enum: `private` | `team`, default `private`), `status` (enum: `active` | `archived`, default `active`), `created_at`, `updated_at`.
+- `team_id` (FK), `name` (1–100 chars trimmed), `description` (0–2000 chars, default ""), `visibility` (enum: `private` | `team`, default `private`), `status` (enum: `active` | `archived`, default `active`).
 - Active listings filter `status = active` (R1.4, R1.5).
 
 **BoardMembership** — User's role on a Board (RBAC source of truth).
-- `id`, `board_id` (FK), `user_id` (FK), `role` (enum: `member` | `admin`), `created_at`. Unique `(board_id, user_id)`.
+- `board_id` (FK), `user_id` (FK), `role` (enum: `member` | `admin`). Unique `(board_id, user_id)`.
 - Guest is not stored here; Guest access derives from an active Invitation_Link (R11). The "at least one Admin" invariant (R10.6) is checked against this table.
 
 **Column** — ordered container in a Board.
-- `id`, `board_id` (FK), `name` (1–100 chars trimmed), `order_index` (int, >= 0), `created_at`.
+- `board_id` (FK), `name` (1–100 chars trimmed), `order_index` (int, >= 0).
 - Unique `(board_id, order_index)` and index on `(board_id, order_index)`. Order indices are contiguous `0..n-1` per board (R2.1, R2.3, R2.5). Default columns "To Do", "Doing", "Done" created at indices 0,1,2 on board creation (R1.2).
 
 **Card** — task item in a Column.
-- `id`, `column_id` (FK), `board_id` (FK, denormalized for search/analytics/scope checks), `title` (1–255 trimmed), `description` (0–5000, default ""), `assignee_id` (FK User, nullable), `due_date` (nullable), `created_by_id` (FK User), `created_at`, `updated_at`, `order_index` (int, >= 0), `version` (int, default 1).
+- `column_id` (FK), `board_id` (FK, denormalized for search/analytics/scope checks), `title` (1–255 trimmed), `description` (0–5000, default ""), `assignee_id` (FK User, nullable), `due_date` (nullable), `created_by_id` (FK User), `order_index` (int, >= 0), `version` (int, default 1). Card is the `BaseModel` exception noted above: it redefines `updated_at` with `default=utc_now` and no `onupdate`, set explicitly by `Card_Service`, and `updatedAt` is the one base field exposed in a response schema (R3.1, R3.3, R4.7).
 - Index on `(column_id, order_index)` with unique `(column_id, order_index)`. Index on `(board_id, lower(title))` and `(board_id, updated_at desc, id desc)` to support search ordering (R7.6). `version` supports R13.
 
 **Comment** — message on a Card, optionally threaded.
-- `id`, `card_id` (FK), `author_id` (FK User), `parent_comment_id` (FK Comment, nullable), `body` (1–5000 non-whitespace), `created_at`, `edited_at` (nullable), `version` (int, default 1).
+- `card_id` (FK), `author_id` (FK User), `parent_comment_id` (FK Comment, nullable), `body` (1–5000 non-whitespace), `edited_at` (nullable), `version` (int, default 1). `edited_at` is the user-facing edit timestamp, distinct from the inherited `updated_at`: it is null until the first edit and is set explicitly by `Comment_Service` on each edit, and it is the edit timestamp exposed in the Comment response schema.
 - Self-referential `parent_comment_id` models threaded replies; replies must share the same `card_id` as the parent (R5.2, R5.8). Deleting a comment cascades to all descendant replies (R5.4).
 
 **Notification** — stored mention record.
-- `id`, `recipient_id` (FK User), `comment_id` (FK Comment), `board_id` (FK), `status` (enum: `unread` | `read`, default `unread`), `created_at`.
+- `recipient_id` (FK User), `comment_id` (FK Comment), `board_id` (FK), `status` (enum: `unread` | `read`, default `unread`).
 - Unique `(recipient_id, comment_id)` enforces "exactly one Notification per distinct mentioned Member per Comment" (R6.1). Index on `(recipient_id, created_at desc, id desc)` and a partial variant filtered on `status = unread` to support cursor pagination and the unread-only filter (R6.2–R6.4, R6.7).
 
 **InvitationLink** — shareable anonymous Guest-access token for a Board.
-- `id`, `board_id` (FK), `token` (unique, high-entropy via `secrets.token_urlsafe`), `status` (enum: `active` | `inactive`, default `active`), `created_by_id` (FK User), plus `BaseModel` columns.
+- `board_id` (FK), `token` (unique, high-entropy via `secrets.token_urlsafe`), `status` (enum: `active` | `inactive`, default `active`), `created_by_id` (FK User).
 - Revocation flips `status` to `inactive` without touching other links (R11.2). Lookup by `token` validates Guest access and grants read-only access iff the link exists and is `active` (R11.3, R11.5, R11.6). A token bound to an archived Board is rejected with `AuthorizationError` until the Board is restored (R11.8).
 
 **ActivityEntry** — logged Board event.
-- `id`, `board_id` (FK), `actor_id` (FK User), `event_type` (enum: `card_created`, `card_updated`, `card_moved`, `card_deleted`, `comment_created`, `comment_edited`, `comment_deleted`, `column_created`, `column_deleted`, `member_joined`, `member_removed`), `resource_id` (affected primary resource identifier), `secondary_resource_id` (nullable; e.g., Card id for comment events R8.6/R8.7, or target User id for member events R8.10/R8.11), `created_at`.
+- `board_id` (FK), `actor_id` (FK User), `event_type` (enum: `card_created`, `card_updated`, `card_moved`, `card_deleted`, `comment_created`, `comment_edited`, `comment_deleted`, `column_created`, `column_deleted`, `member_joined`, `member_removed`), `resource_id` (affected primary resource identifier), `secondary_resource_id` (nullable; e.g., Card id for comment events R8.6/R8.7, or target User id for member events R8.10/R8.11).
 - Index on `(board_id, created_at desc, id desc)` for paged retrieval ordering (R8.12). `created_at` (UTC) also drives analytics activity-by-day grouping (R9.5).
 
 ### Version Identifiers and Optimistic Concurrency (R13)
@@ -285,7 +285,7 @@ erDiagram
 - Supplied version != current → conflict error, resource unchanged (R13.2).
 - Supplied version == current → update applied, `version` incremented to a value distinct from all prior versions (monotonic increment) (R13.3).
 
-Implementation uses a conditional `UPDATE ... WHERE id = :id AND version = :expected` returning the affected row count; zero rows means a conflict. The monotonic increment guarantees distinctness from every prior version.
+Implementation uses a conditional `UPDATE ... WHERE id = :id AND version = :expected` returning the affected row count; zero rows means a conflict. The monotonic increment guarantees distinctness from every prior version. A Card edit's conditional `UPDATE` sets the Card's `updated_at` and increments `version` explicitly in the same statement (R3.3, R13.3); a Comment edit's conditional `UPDATE` sets the Comment's `edited_at` and increments `version` explicitly in the same statement (R5.3, R13.3).
 
 ## API Design
 
@@ -345,8 +345,8 @@ Reorder body: `{ "targetIndex": int }`; out-of-range index rejected (R2.7). Dele
 | POST | `/api/columns/{columnId}/cards` | Member/Admin | Create, append at end | R3.1, R3.2, R3.6, R3.7 |
 | GET | `/api/cards/{cardId}` | Member/Admin | Fetch card incl. `version` | R13.1 |
 | PATCH | `/api/cards/{cardId}` | Member/Admin | Atomic multi-field edit; requires `version` | R3.3, R3.4, R3.6, R3.7, R3.8, R3.9, R3.10, R13 |
-| POST | `/api/cards/{cardId}/move` | Member/Admin | Move to target column + index, reindex (no `version`) | R4.1, R4.2, R4.3, R4.4, R4.5, R4.6, R4.7 |
-| DELETE | `/api/cards/{cardId}` | Member/Admin | Delete + reindex column (`204`) | R3.5, R3.6, R3.9 |
+| POST | `/api/cards/{cardId}/move` | Member/Admin | Move to target column + index, reindex (no `version`) | R4.1, R4.2, R4.3, R4.4, R4.5, R4.6, R4.7, R13.6 |
+| DELETE | `/api/cards/{cardId}` | Member/Admin | Delete + reindex column (`204`) | R3.5, R3.6, R3.9, R13.6 |
 
 Move body: `{ "targetColumnId": id, "targetIndex": int }`. Validations: target column must be in the same board (R4.4); target index is an integer in `[0, count-in-target-after-removal]` (R4.5); Guests rejected (R4.6, R3.6). A move needs no `version` and never changes `version` (R13.6); it sets `updated_at` only on the moved Card, leaving reindex-shifted Cards' `updated_at` unchanged (R4.7). PATCH requires `version`, sets `updated_at`, and bumps `version` (R3.3, R13.3). Anonymous Guest card reads go through `/api/guest/<token>/board` (cards nested), not these authenticated routes.
 
@@ -357,7 +357,7 @@ Move body: `{ "targetColumnId": id, "targetIndex": int }`. Validations: target c
 | GET | `/api/cards/{cardId}/comments` | Member/Admin | List comments as a flat list with `parentCommentId`, oldest first, incl. `version` | R13.1, R12.2, R12.3 |
 | POST | `/api/cards/{cardId}/comments` | Member/Admin | Create top-level or reply (`parentCommentId`) | R5.1, R5.2, R5.6, R5.7, R5.8 |
 | PATCH | `/api/comments/{commentId}` | Member/Admin (author) | Edit own; set `edited_at`, requires `version` | R5.3, R5.5, R5.7, R13 |
-| DELETE | `/api/comments/{commentId}` | Member/Admin (author) | Delete own + cascade replies (`204`) | R5.4, R5.5, R5.6 |
+| DELETE | `/api/comments/{commentId}` | Member/Admin (author) | Delete own + cascade replies (`204`) | R5.4, R5.5, R5.6, R13.6 |
 
 Comments are returned as a flat list carrying `parentCommentId` (the client builds the thread tree). Reply with an invalid/other-card parent rejected (R5.8). Editing/deleting another user's comment rejected with authorization error (R5.5). Guests rejected (R5.6). Comment delete needs no `version` (R13.6). Creating a comment parses Mentions (`@[<user-uuid>]` tokens) and, in the same transaction, creates exactly one Notification per distinct mentioned User who is a current Board Member (R6.1, R6.8) and an Activity_Entry (R8.4); an invalid or non-member mention never rejects the Comment.
 
@@ -421,7 +421,7 @@ Response: `{ totalCards, perColumn: [{columnId, count}], completionRate, activit
 | GET | `/api/team-join-links/{token}` | authenticated | Preview bound Team name `{ teamName }` | R17.8 |
 | POST | `/api/team-join-links/{token}/accept` | authenticated | Join bound Team as `team_regular` → `{ teamId }` | R17.3, R17.4, R17.5, R17.7 |
 
-Any authenticated User creates a Team and becomes its `team_admin` (R16.1). `GET /api/teams` and `GET /api/teams/{teamId}/members` are restricted to Team_Members; a non-member requesting members is rejected with an authorization error (R16.5). Team_Role comes from stored `TeamMembership` on every request (R16.6). Only a Team_Admin may generate, list, or revoke join links (R17.6). An unknown, inactive, or expired token on `accept` or `preview` yields a single generic validation error that the Team_Join_Link is invalid (R17.4, R17.8); a User already a member of the bound Team is rejected with a validation error (R17.5). Acceptance is effective on the User's next request (R17.3); an unauthenticated accept is rejected with an authentication error (R17.7). Expiry is computed from `expires_at` at read time (R17.1). V1 has no Team remove, leave, role change, rename, or delete.
+Any authenticated User creates a Team and becomes its `team_admin` (R16.1). `GET /api/teams` and `GET /api/teams/{teamId}/members` are restricted to Team_Members; a non-member requesting members is rejected with an authorization error (R16.5). Team_Role comes from stored `TeamMembership` on every request (R16.6). Only a Team_Admin may generate, list, or revoke join links (R17.6). The join-link responses (create, list, and revoke) all use the `TeamJoinLink` schema, which includes the derived field `isExpired` (computed on the server at read time — `expiresAt` is in the past — and never stored) alongside `id`, `teamId`, `token`, `status`, `expiresAt`, and `createdAt`. An unknown, inactive, or expired token on `accept` or `preview` yields a single generic validation error that the Team_Join_Link is invalid (R17.4, R17.8); a User already a member of the bound Team is rejected with a validation error (R17.5). Acceptance is effective on the User's next request (R17.3); an unauthenticated accept is rejected with an authentication error (R17.7). Expiry is computed from `expires_at` at read time (R17.1). V1 has no Team remove, leave, role change, rename, or delete.
 
 ### Access_Control_Service: Guest Access (R11)
 
@@ -453,8 +453,7 @@ These are the camelCase JSON shapes returned by the endpoints above. Field names
   id: string,
   name: string,
   currentUserTeamRole: "team_admin" | "team_regular",
-  createdAt: string,
-  updatedAt: string
+  createdAt: string
 }
 ```
 
@@ -497,8 +496,7 @@ These are the camelCase JSON shapes returned by the endpoints above. Field names
   visibility: "private" | "team",
   status: "active" | "archived",
   currentUserRole: "admin" | "member",
-  createdAt: string,
-  updatedAt: string
+  createdAt: string
 }
 ```
 
@@ -949,9 +947,9 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 ### Property 33: Board invitations require an eligible, not-already-member Team_Member
 
-*For any* Board member invitation, the invitation succeeds only when the invited User is a Team_Member of the Board's Team and is not already a Board member; otherwise the request is rejected with a validation error and Board membership is unchanged.
+*For any* Board member invitation, the invitation succeeds only when the invited User is a Team_Member of the Board's Team, is not already a Board member, and is invited with a role of either member or admin; an invitation specifying any other role is rejected with a validation error and Board membership is unchanged, and so is any invitation that otherwise fails these conditions.
 
-**Validates: Requirements 10.1, 10.5, 10.8**
+**Validates: Requirements 10.1, 10.4, 10.5, 10.8**
 
 ### Property 34: Team_Join_Link lifecycle and access control
 

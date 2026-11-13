@@ -10,9 +10,11 @@ Layering, transactions, and the error model are in `tech.md` and
 folder layout is in `structure.md`. This file covers how Flask code is written.
 
 ## 1. Blueprint per module
-**Rule:** Each module under `backend/flask_app/<module>/` defines one Blueprint
-in `routes.py`, input schemas in `schema.py`, and logic in `service.py`, and
-exports the Blueprint from `__init__.py`. Route paths are written in full
+**Rule:** Each module under `backend/flask_app/<module>/` defines its Blueprint
+in `routes.py` (one per module; `access/` has two: `access_bp` for members and
+invitations and `guest_bp` for Guest routes), input schemas in `schema.py`
+(omitted when no route takes a request body or query string), and logic in
+`service.py`, and exports the Blueprint(s) from `__init__.py`. Route paths are written in full
 starting with `/api` (no `url_prefix`). Blueprints are registered in `app.py`.
 Handlers follow `card-conventions.md` rule 1 (max 5 lines).
 **Rationale:** Identical layout per module, so the agent always knows where code goes.
@@ -112,7 +114,7 @@ URL, bad method) to the same envelope, and maps any unexpected exception to 500
 after logging the traceback server-side. Every error handler rolls back the
 session. Error `code` values are snake_case constants defined in `exceptions.py`.
 Messages never contain SQL, secrets, or whether an account exists or is locked
-(R15.3, R15.5).
+(R15.3, R15.5). The one exception is a non-GET request to `/api/guest/...`, which returns 403 `AuthorizationError` instead of 405 (see rule 3).
 **Rationale:** One place owns the error-to-HTTP mapping.
 **Example:** `raise NotFoundError('Card not found')` returns 404 with code `not_found`.
 

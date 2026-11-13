@@ -68,7 +68,7 @@ fileMatchPattern: "frontend/**/*.{ts,tsx}"
 ## Data & State
 
 ### 12. One API client
-**Rule:** All HTTP calls go through the typed client in `src/lib/apiClient.ts`; no raw `fetch` in components or hooks. The client calls same-origin `/api/...` paths (proxied to the backend by Next.js rewrites), never the backend URL. Authentication relies on `HttpOnly` cookies the browser sends automatically: the client never reads, stores, or attaches tokens, and nothing is ever put in `localStorage`, `sessionStorage`, or a JS-readable cookie. On a `401`, call the refresh endpoint once and retry the original request; if refresh fails, redirect to `/login`, except on public pages (`/login`, `/register`), where the error is shown instead. Errors are typed to match the envelope in `design.md`. Do not attempt a refresh for the auth endpoints themselves (login, register, refresh); a `401` there is returned to the caller as a normal error. 
+**Rule:** All HTTP calls go through the typed client in `src/lib/apiClient.ts`; no raw `fetch` in components or hooks. The client calls same-origin `/api/...` paths (proxied to the backend by Next.js rewrites), never the backend URL. Authentication relies on `HttpOnly` cookies the browser sends automatically: the client never reads, stores, or attaches tokens, and nothing is ever put in `localStorage`, `sessionStorage`, or a JS-readable cookie. On a `401`, call the refresh endpoint once and retry the original request; if refresh fails, redirect to `/login`, except on public pages: `/login`, `/register`, and `/invite/[token]` (anonymous Guest access) show the error instead of redirecting. `/join/[token]` requires login: if the user is not authenticated, redirect to `/login` and return to the same join link after a successful login. A `204` response has no body: do not parse JSON from it.
 **Rationale:** Cookies keep tokens out of reach of XSS, and one client keeps refresh and error handling in one place.
 **Example:** `const card = await apiClient.moveCard(cardId, { targetColumnId, targetIndex });`
 
@@ -141,10 +141,10 @@ header could otherwise leak it to other sites.
 read-only, and never redirects to `/login`; a 403 shows a plain "link not
 available" message. Comments arrive as a flat list and the thread tree is built
 in the client from `parentCommentId`. `/join/[token]` first calls
-`GET /api/team-join-links/<token>` to show the Team name, and `accept` only
-after the user confirms; a not-logged-in user is sent to `/login` and returns to
-the same link. Both pages show one generic message for an invalid, inactive, or
-expired token.
+`GET /api/team-join-links/<token>` to show the Team name, and calls `accept`
+only after the user confirms; a not-logged-in user is sent to `/login` and
+returns to the same link. Both pages show one generic message for an invalid,
+inactive, or expired token.
 **Rationale:** Matches the Guest and Team join decisions, and avoids leaking
 which failure occurred.
 **Example:** the `/join/[token]` page shows "Join Team X?" with a confirm button.
