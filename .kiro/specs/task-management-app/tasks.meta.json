@@ -84,6 +84,97 @@
         "chatSessionId": "sess_fa88035e-e9c8-4a2c-b75f-06e1561dd7e8",
         "timestamp": 1794628349746
       }
+    ],
+    "2.1 Create `BaseModel` and identity/team models": [
+      {
+        "executionId": "a2ac4c65-38db-49be-bed0-0cf91f065b34",
+        "chatSessionId": "sess_b5a4b86a-6216-4617-bec1-8739652508dc",
+        "timestamp": 1794630228670
+      },
+      {
+        "executionId": "a2ac4c65-38db-49be-bed0-0cf91f065b34",
+        "chatSessionId": "sess_b5a4b86a-6216-4617-bec1-8739652508dc",
+        "timestamp": 1794630322615
+      }
+    ],
+    "2.2 Create Board-domain models": [
+      {
+        "executionId": "95f2ccaa-a041-4436-a263-e93b0685f910",
+        "chatSessionId": "sess_b3129cb3-2b55-435e-9036-52dc08a66426",
+        "timestamp": 1794630600113
+      },
+      {
+        "executionId": "95f2ccaa-a041-4436-a263-e93b0685f910",
+        "chatSessionId": "sess_b3129cb3-2b55-435e-9036-52dc08a66426",
+        "timestamp": 1794630709507
+      }
+    ],
+    "2.3 Create and review migration (a): identity and Team tables": [
+      {
+        "executionId": "ee8858be-4564-49e7-b9c2-3abe0a131343",
+        "chatSessionId": "sess_dedbb2f7-0174-4e09-9b05-adba7139452b",
+        "timestamp": 1794631207586
+      },
+      {
+        "executionId": "ee8858be-4564-49e7-b9c2-3abe0a131343",
+        "chatSessionId": "sess_dedbb2f7-0174-4e09-9b05-adba7139452b",
+        "timestamp": 1794631450326
+      }
+    ],
+    "2.4 Create and review migration (b): Board, Column, Card, and access tables": [
+      {
+        "executionId": "40aaecd0-ce40-421b-a7bc-c6dd98e859a0",
+        "chatSessionId": "sess_bba84182-4310-4e37-8ccb-6321c51ebb2c",
+        "timestamp": 1794635329387
+      },
+      {
+        "executionId": "40aaecd0-ce40-421b-a7bc-c6dd98e859a0",
+        "chatSessionId": "sess_bba84182-4310-4e37-8ccb-6321c51ebb2c",
+        "timestamp": 1794635950725
+      }
+    ],
+    "2.5 Create and review migration (c): Comment, Notification, and Activity tables": [
+      {
+        "executionId": "2a8d85f0-9eac-4629-9973-00e2cda8939e",
+        "chatSessionId": "sess_59bfb866-e1b0-49ac-9662-7fbd4488559f",
+        "timestamp": 1794636010975
+      },
+      {
+        "executionId": "2a8d85f0-9eac-4629-9973-00e2cda8939e",
+        "chatSessionId": "sess_59bfb866-e1b0-49ac-9662-7fbd4488559f",
+        "timestamp": 1794636100060
+      }
+    ],
+    "2.6 Create the test database fixtures": [
+      {
+        "executionId": "5ef122e4-0103-4ca5-849b-ca9d22c8ffb4",
+        "chatSessionId": "sess_9f05be58-6977-4213-8c32-dd25cd3dd473",
+        "timestamp": 1794636375302
+      },
+      {
+        "executionId": "5ef122e4-0103-4ca5-849b-ca9d22c8ffb4",
+        "chatSessionId": "sess_9f05be58-6977-4213-8c32-dd25cd3dd473",
+        "timestamp": 1794636534948
+      }
+    ],
+    "2.7 Write schema verification tests": [
+      {
+        "executionId": "aa7c00fb-06ac-4bdb-9726-366f1c304fa7",
+        "chatSessionId": "sess_cc74828d-57c7-43c3-b44c-6218ff46b35b",
+        "timestamp": 1794636619436
+      },
+      {
+        "executionId": "aa7c00fb-06ac-4bdb-9726-366f1c304fa7",
+        "chatSessionId": "sess_cc74828d-57c7-43c3-b44c-6218ff46b35b",
+        "timestamp": 1794636766940
+      }
+    ],
+    "2. Data models and migrations": [
+      {
+        "executionId": "aa7c00fb-06ac-4bdb-9726-366f1c304fa7",
+        "chatSessionId": "sess_cc74828d-57c7-43c3-b44c-6218ff46b35b",
+        "timestamp": 1794636767351
+      }
     ]
   }
 }

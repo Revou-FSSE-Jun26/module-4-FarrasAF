@@ -64,40 +64,40 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - All application code under `src/`; install `@dnd-kit/core` and `@dnd-kit/sortable` with pinned versions
     - _Requirements: 14.3, 14.4, 11.3, 17.3_
 
-- [ ] 2. Data models and migrations
-  - [ ] 2.1 Create `BaseModel` and identity/team models
+- [x] 2. Data models and migrations
+  - [x] 2.1 Create `BaseModel` and identity/team models
     - `models/base.py`: `BaseModel` with exactly `id` (UUID v4), `created_at`, `updated_at`, `deleted_at`
     - Models: `User` (email unique lowercased, `password_hash`, `display_name`, `failed_login_attempts`, `locked_until`), `RefreshToken` (`token_hash` unique, `expires_at`, `revoked`), `Team`, `TeamMembership` (`team_role` check constraint, unique `(team_id, user_id)`), `TeamJoinLink` (`token` unique, `status`, `expires_at`, `created_by_id`)
     - Enum-like values as `String(50)` + `CheckConstraint`; relationships on both sides with explicit `lazy`
     - _Requirements: 15.1, 15.4, 15.8, 15.14, 15.15, 16.1, 17.1_
 
-  - [ ] 2.2 Create Board-domain models
+  - [x] 2.2 Create Board-domain models
     - Models: `Board`, `BoardMembership` (unique `(board_id, user_id)`), `Column` (deferrable unique `(board_id, order_index)`), `Card` (own `updated_at` with `default=utc_now` and no `onupdate`, `version`, deferrable unique `(column_id, order_index)`, indexes from `design.md`), `Comment` (self-referential `parent_comment_id`, `edited_at`, `version`), `Notification` (unique `(recipient_id, comment_id)`, cursor and unread partial indexes), `InvitationLink`, `ActivityEntry` (no FK on `resource_id`, index `(board_id, created_at desc, id desc)`)
     - Board-delete cascades via `ondelete="CASCADE"` and `passive_deletes=True`; `models/__init__.py` imports every model so Alembic sees them
     - _Requirements: 1.6, 2.1, 3.1, 4.7, 5.2, 6.1, 8.12, 11.1, 13.4_
 
-  - [ ] 2.3 Create and review migration (a): identity and Team tables
+  - [x] 2.3 Create and review migration (a): identity and Team tables
     - Tables: `users`, `refresh_tokens`, `teams`, `team_memberships`, `team_join_links` (models `User`, `RefreshToken`, `Team`, `TeamMembership`, `TeamJoinLink`)
     - Generate with `flask --app flask_app.app db migrate -m "identity and team tables"`; if autogenerate emits all tables at once, split the output into three revision files (a), (b), (c) by table group before any is applied, and chain `down_revision` (a) -> (b) -> (c)
     - Hand-review for `CheckConstraint`, unique constraints, indexes, and naming-convention names; ensure a working `downgrade`; verify `upgrade` then `downgrade` on the local database
     - Run `flask --app flask_app.app db init` once to create `migrations/` and commit it; confirm `migrations/env.py` uses the app's metadata (including the `naming_convention`) so autogenerate sees every model
     - _Requirements: 15.1, 15.8, 16.1, 17.1_
 
-  - [ ] 2.4 Create and review migration (b): Board, Column, Card, and access tables
+  - [x] 2.4 Create and review migration (b): Board, Column, Card, and access tables
     - Tables: `boards`, `board_memberships`, `columns`, `cards`, `invitation_links` (models `Board`, `BoardMembership`, `Column`, `Card`, `InvitationLink`); depends on migration (a)
     - Hand-review for the deferrable `INITIALLY DEFERRED` unique constraints on `(board_id, order_index)` and `(column_id, order_index)`, the Card indexes from `design.md`, `ondelete="CASCADE"` on Board children, and a Card `updated_at` with no server-side update trigger; ensure a working `downgrade`
     - _Requirements: 1.6, 2.3, 4.2, 4.7, 11.1_
 
-  - [ ] 2.5 Create and review migration (c): Comment, Notification, and Activity tables
+  - [x] 2.5 Create and review migration (c): Comment, Notification, and Activity tables
     - Tables: `comments`, `notifications`, `activity_entries` (models `Comment`, `Notification`, `ActivityEntry`); depends on migration (b)
     - Hand-review for the self-referential `parent_comment_id`, the unique `(recipient_id, comment_id)`, the Notification cursor and unread partial indexes, the `(board_id, created_at desc, id desc)` Activity index, no FK on `resource_id`, and Board-delete cascades; ensure a working `downgrade`; run `upgrade head` and `downgrade base` end to end
     - _Requirements: 1.6, 5.2, 6.1, 8.12_
 
-  - [ ] 2.6 Create the test database fixtures
+  - [x] 2.6 Create the test database fixtures
     - `tests/conftest.py`: app fixture, transactional DB session with rollback per test, factory fixtures for users, teams, boards, columns, cards, and a controllable clock for `utc_now`
     - _Requirements: 15.7_
 
-  - [ ] 2.7 Write schema verification tests
+  - [x] 2.7 Write schema verification tests
     - File: `tests/integration/test_schema_constraints.py`, run against PostgreSQL
     - A multi-row `order_index` reindex (for example swapping or shifting several Cards in one Column, and several Columns in one Board) succeeds inside one transaction with the deferrable unique constraints, and a genuine duplicate still fails at commit
     - An unrelated `UPDATE` (for example on a Card's `description`, or reindexing a different Card) does not change a Card's `updated_at`
