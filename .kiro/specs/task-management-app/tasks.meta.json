@@ -1,5 +1,10 @@
 {
-  "pbtResults": {},
+  "pbtResults": {
+    "1.4 Write property test for the cursor codec": {
+      "status": "passed",
+      "lastRunTimestamp": 1794627278454
+    }
+  },
   "executionHistory": {
     "1.1 Scaffold the backend project": [
       {
@@ -11,6 +16,73 @@
         "executionId": "fd1cfb7e-00ce-48b4-b81c-330c1819f2bb",
         "chatSessionId": "sess_895678ac-b9c1-4d94-8a8a-ed583a00fe5f",
         "timestamp": 1794626274084
+      }
+    ],
+    "1.2 Implement shared `common/` helpers and central error handling": [
+      {
+        "executionId": "ca179967-d974-4468-8d29-272869356a70",
+        "chatSessionId": "sess_c0cde9f8-9505-4012-bc67-4fa5073dc63f",
+        "timestamp": 1794626952453
+      },
+      {
+        "executionId": "ca179967-d974-4468-8d29-272869356a70",
+        "chatSessionId": "sess_c0cde9f8-9505-4012-bc67-4fa5073dc63f",
+        "timestamp": 1794627058461
+      }
+    ],
+    "1.3 Implement pure ordering and cursor logic": [
+      {
+        "executionId": "a7c32f9d-2a68-4934-aeb2-e5687c15fc6a",
+        "chatSessionId": "sess_cf48495d-9edb-402d-99f7-975f1240d171",
+        "timestamp": 1794627115770
+      },
+      {
+        "executionId": "a7c32f9d-2a68-4934-aeb2-e5687c15fc6a",
+        "chatSessionId": "sess_cf48495d-9edb-402d-99f7-975f1240d171",
+        "timestamp": 1794627165144
+      }
+    ],
+    "1.4 Write property test for the cursor codec": [
+      {
+        "executionId": "eb5364df-f80c-479d-8c40-eadae88c6122",
+        "chatSessionId": "sess_23ec19e4-76b3-4820-9c1c-78cf87b5b45e",
+        "timestamp": 1794627212968
+      },
+      {
+        "executionId": "eb5364df-f80c-479d-8c40-eadae88c6122",
+        "chatSessionId": "sess_23ec19e4-76b3-4820-9c1c-78cf87b5b45e",
+        "timestamp": 1794627291584
+      }
+    ],
+    "1.5 Write unit tests for common helpers": [
+      {
+        "executionId": "ebd3c86a-8891-44d0-8960-ffb24277d814",
+        "chatSessionId": "sess_8d9446ae-05dc-45c4-b93e-980005fc2bfa",
+        "timestamp": 1794627391047
+      },
+      {
+        "executionId": "ebd3c86a-8891-44d0-8960-ffb24277d814",
+        "chatSessionId": "sess_8d9446ae-05dc-45c4-b93e-980005fc2bfa",
+        "timestamp": 1794627480142
+      }
+    ],
+    "1.6 Scaffold the Next.js app": [
+      {
+        "executionId": "4e330298-3670-4dc7-a49b-5467341f0ca7",
+        "chatSessionId": "sess_fa88035e-e9c8-4a2c-b75f-06e1561dd7e8",
+        "timestamp": 1794627541612
+      },
+      {
+        "executionId": "4e330298-3670-4dc7-a49b-5467341f0ca7",
+        "chatSessionId": "sess_fa88035e-e9c8-4a2c-b75f-06e1561dd7e8",
+        "timestamp": 1794628347161
+      }
+    ],
+    "1. Project foundation: backend helpers and frontend scaffold": [
+      {
+        "executionId": "4e330298-3670-4dc7-a49b-5467341f0ca7",
+        "chatSessionId": "sess_fa88035e-e9c8-4a2c-b75f-06e1561dd7e8",
+        "timestamp": 1794628349746
       }
     ]
   }

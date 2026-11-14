@@ -27,7 +27,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
 
 ## Tasks
 
-- [ ] 1. Project foundation: backend helpers and frontend scaffold
+- [x] 1. Project foundation: backend helpers and frontend scaffold
   - [x] 1.1 Scaffold the backend project
     - Create `backend/requirements.txt` (pinned versions: Flask, Flask-SQLAlchemy, Flask-Migrate, PyJWT, `psycopg[binary]`, `python-dotenv`, `gunicorn`, `argon2-cffi`, `marshmallow`, plus `pytest`, `hypothesis`, `ruff`, `mypy`), `backend/pyproject.toml` (ruff, mypy, pytest config), `backend/.env.example` (`DATABASE_URL`, `JWT_SECRET_KEY`, `COOKIE_SECURE`, ...)
     - Create a Python 3.14 virtual environment in `backend/venv` (for example `py -3.14 -m venv venv` on Windows), activate it, confirm `python --version` reports 3.14, make sure `venv/` and `.env` are git-ignored, and run `pip install -r requirements.txt` to install every dependency listed in `requirements.txt`
@@ -36,28 +36,28 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Create empty `tests/{unit,properties,integration}` folders and `scripts/__init__.py`
     - _Requirements: 14.2_
 
-  - [ ] 1.2 Implement shared `common/` helpers and central error handling
+  - [x] 1.2 Implement shared `common/` helpers and central error handling
     - `exceptions.py`: `AppError` subclasses (`ValidationError`, `NotFoundError`, `ConflictError`, `AuthorizationError`, `AuthenticationError`) with snake_case `code` constants including `internal_error`
     - `time.py` (`utc_now`), `pagination.py` (Notifications 50, Activity 100, Search 100), `validation.py` (`BaseSchema` with `unknown = RAISE`, `TrimmedStr`, `NonBlankStr`, `load_schema` reporting the first failing field), `serialization.py` (`read_json`, `read_query`, `json_response`: camelCase/snake_case conversion for keys only, UUID strings, ISO 8601 UTC with `Z`)
     - `health.py`: public `GET /api/health` returning 200 and never touching the database
     - In `app.py`: register the health Blueprint, map `AppError` subclasses and Werkzeug `HTTPException`s to `{ "error": { "code", "message", "field?" } }`, map unexpected exceptions to 500 `internal_error` after logging the traceback, and roll back the session in every handler
     - _Requirements: 13.5, 14.2, 15.3, 15.5_
 
-  - [ ] 1.3 Implement pure ordering and cursor logic
+  - [x] 1.3 Implement pure ordering and cursor logic
     - `common/ordering.py`: side-effect-free `reindex(items)` assigning contiguous `order_index` `0..n-1` (adds to the session only, never commits)
     - `common/cursor.py`: `encode_cursor(created_at, id)` / `decode_cursor(token)` producing an opaque URL-safe string and raising `ValidationError` on malformed input
     - _Requirements: 2.3, 2.5, 3.5, 4.2, 6.7, 6.10_
 
-  - [ ] 1.4 Write property test for the cursor codec
+  - [x] 1.4 Write property test for the cursor codec
     - File: `tests/properties/test_property_15_cursor_codec.py`
     - **Property 15: Notification cursor codec round-trip**
     - **Validates: Requirements 6.10**
 
-  - [ ] 1.5 Write unit tests for common helpers
+  - [x] 1.5 Write unit tests for common helpers
     - `tests/unit/test_common.py`: camelCase/snake_case conversion, `TrimmedStr`/`NonBlankStr`/`load_schema` behavior, error-to-envelope mapping (including 404/405/500), `reindex` examples, and that `/api/health` returns 200 without a database session
     - _Requirements: 6.10, 14.2_
 
-  - [ ] 1.6 Scaffold the Next.js app
+  - [x] 1.6 Scaffold the Next.js app
     - Create `frontend/` with Next.js App Router, React, TypeScript strict mode (alias `@/*` -> `./src/*`), Tailwind CSS, `eslint`, `prettier` with `prettier-plugin-tailwindcss`, `.env.example` (`API_URL`), `playwright.config.ts`, and `next.config.ts` with the `/api/:path*` rewrite to `API_URL` and `Referrer-Policy: no-referrer` headers for `/invite/:token*` and `/join/:token*`
     - ESLint config keeps `@typescript-eslint/no-explicit-any` set to `error`
     - `playwright.config.ts` defines a `webServer` array that starts both servers: the Flask backend (started with the venv's Python executable, `python -m flask --app flask_app.app run` from `backend/`, for example `venv/Scripts/python` on Windows and `venv/bin/python` elsewhere, so the E2E run does not depend on a shell with the venv activated) and the frontend (`npm run dev` from `frontend/`), each with a `url` readiness check (`/api/health` for the backend) and `reuseExistingServer` outside CI; the backend gets `DATABASE_URL` pointing to a dedicated E2E test database (never the development or production database), `JWT_SECRET_KEY`, and `COOKIE_SECURE=false`, and the frontend gets `API_URL` pointing to that local backend; `baseURL` is the local frontend
