@@ -3,6 +3,18 @@
     "1.4 Write property test for the cursor codec": {
       "status": "passed",
       "lastRunTimestamp": 1794627278454
+    },
+    "4.3 Write property test for password hashing": {
+      "status": "passed",
+      "lastRunTimestamp": 1794639177310
+    },
+    "4.4 Write property test for generic login failures": {
+      "status": "passed",
+      "lastRunTimestamp": 1794639495158
+    },
+    "4.6 Write property test for refresh-token exchange and revocation": {
+      "status": "passed",
+      "lastRunTimestamp": 1794640283780
     }
   },
   "executionHistory": {
@@ -193,6 +205,90 @@
         "executionId": "4622b887-76a4-424e-9cb2-f61876bf8ee9",
         "chatSessionId": "sess_28a1d75b-ce8f-4356-9020-a8ca8d70a55a",
         "timestamp": 1794637930882
+      }
+    ],
+    "4.1 Implement the `auth/` module": [
+      {
+        "executionId": "b473ba0e-26f3-4b39-957a-948302f393ff",
+        "chatSessionId": "sess_72f21a11-0cf3-4033-bad6-18396da67e48",
+        "timestamp": 1794638097878
+      },
+      {
+        "executionId": "b473ba0e-26f3-4b39-957a-948302f393ff",
+        "chatSessionId": "sess_72f21a11-0cf3-4033-bad6-18396da67e48",
+        "timestamp": 1794638328822
+      }
+    ],
+    "4.2 Write unit tests for the auth service": [
+      {
+        "executionId": "e98f4faf-a988-488b-b67d-9f5a9d2d17b5",
+        "chatSessionId": "sess_5fcf07e7-b70e-41a1-9270-4ae6d413cf9c",
+        "timestamp": 1794638521833
+      },
+      {
+        "executionId": "e98f4faf-a988-488b-b67d-9f5a9d2d17b5",
+        "chatSessionId": "sess_5fcf07e7-b70e-41a1-9270-4ae6d413cf9c",
+        "timestamp": 1794638747416
+      }
+    ],
+    "4.3 Write property test for password hashing": [
+      {
+        "executionId": "2df71351-9d8d-4343-9b21-d573fa2dbe70",
+        "chatSessionId": "sess_88909c14-e165-4abb-8efc-9efc28003008",
+        "timestamp": 1794638854361
+      },
+      {
+        "executionId": "2df71351-9d8d-4343-9b21-d573fa2dbe70",
+        "chatSessionId": "sess_88909c14-e165-4abb-8efc-9efc28003008",
+        "timestamp": 1794639192553
+      }
+    ],
+    "4.4 Write property test for generic login failures": [
+      {
+        "executionId": "6ec4a011-3235-4763-8168-b3359bdf0b8f",
+        "chatSessionId": "sess_ba187b94-a788-471b-b077-99ad9af9f4fc",
+        "timestamp": 1794639356608
+      },
+      {
+        "executionId": "6ec4a011-3235-4763-8168-b3359bdf0b8f",
+        "chatSessionId": "sess_ba187b94-a788-471b-b077-99ad9af9f4fc",
+        "timestamp": 1794639505979
+      }
+    ],
+    "4.5 Write property test for registration validation": [
+      {
+        "executionId": "26a8db04-4f93-47ed-914e-0c70cdab6c0c",
+        "chatSessionId": "sess_a301c4bd-5ede-4caa-ab3a-f3c31a016419",
+        "timestamp": 1794639665779
+      },
+      {
+        "executionId": "26a8db04-4f93-47ed-914e-0c70cdab6c0c",
+        "chatSessionId": "sess_a301c4bd-5ede-4caa-ab3a-f3c31a016419",
+        "timestamp": 1794639892938
+      }
+    ],
+    "4.6 Write property test for refresh-token exchange and revocation": [
+      {
+        "executionId": "0f2e584e-9b5e-45d2-997b-8212dc148a74",
+        "chatSessionId": "sess_a36c75b7-8fc5-4338-bb6b-a55d6b762b5a",
+        "timestamp": 1794640063737
+      },
+      {
+        "executionId": "0f2e584e-9b5e-45d2-997b-8212dc148a74",
+        "chatSessionId": "sess_a36c75b7-8fc5-4338-bb6b-a55d6b762b5a",
+        "timestamp": 1794640295397
+      }
+    ],
+    "4.7 Write property test for account lockout": [
+      {
+        "executionId": "b487df47-0e3f-4342-b6af-591e143ed0f8",
+        "chatSessionId": "sess_ea44f6fc-b586-4576-9667-3f5d7f411b8c",
+        "timestamp": 1794640456459
+      },
+      {
+        "executionId": "b487df47-0e3f-4342-b6af-591e143ed0f8",
+        "chatSessionId": "sess_ea44f6fc-b586-4576-9667-3f5d7f411b8c",
+        "timestamp": 1794640711689
       }
     ]
   }

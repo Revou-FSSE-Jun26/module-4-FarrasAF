@@ -113,37 +113,37 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Fix every failure, ask the user if questions arise, then commit with the checkpoint number in the message
 
 - [ ] 4. Authentication_Service
-  - [ ] 4.1 Implement the `auth/` module
+  - [x] 4.1 Implement the `auth/` module
     - `service.py`: register (account only, argon2 hash, duplicate email is a `ValidationError`), login (generic error, lockout after 3 consecutive failures for 15 minutes via `utc_now()`, counter reset on success and after the window), refresh (valid, non-revoked, non-expired token yields identity-only access token), logout (revoke refresh token), `me`
     - `schema.py` (email format, password >= 8 and never trimmed, `display_name` 1-50 trimmed), `routes.py` (public register/login/refresh/logout, `GET /api/auth/me`), `set_auth_cookies()` / `clear_auth_cookies()` (`HttpOnly`, `SameSite=Lax`, no `Domain`, `Secure` from `COOKIE_SECURE`, refresh cookie scoped to `/api/auth/refresh` and `/api/auth/logout`), `@token_required` decorator, refresh tokens stored hashed from `secrets.token_urlsafe`
     - Register the Blueprint in `app.py`; never return tokens in bodies or log them
     - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7, 15.8, 15.9, 15.10, 15.11, 15.12, 15.13, 15.14, 15.15, 15.16_
 
-  - [ ] 4.2 Write unit tests for the auth service
+  - [x] 4.2 Write unit tests for the auth service
     - `tests/unit/test_auth.py`: login sets both cookies and returns identity (R15.2), logout revokes refresh token and clears cookies (R15.8), refresh issues a new identity-only token (R15.11), duplicate email (R15.15), lockout lock/unlock with the controllable clock (R15.4-15.7)
     - _Requirements: 15.2, 15.4, 15.5, 15.6, 15.7, 15.8, 15.11, 15.15_
 
-  - [ ] 4.3 Write property test for password hashing
+  - [x] 4.3 Write property test for password hashing
     - File: `tests/properties/test_property_26_password_hash.py`
     - **Property 26: Passwords are stored as a verifiable argon2 hash**
     - **Validates: Requirements 15.1**
 
-  - [ ] 4.4 Write property test for generic login failures
+  - [x] 4.4 Write property test for generic login failures
     - File: `tests/properties/test_property_27_generic_login_error.py`
     - **Property 27: Login failures do not disclose which field was wrong**
     - **Validates: Requirements 15.3**
 
-  - [ ] 4.5 Write property test for registration validation
+  - [x] 4.5 Write property test for registration validation
     - File: `tests/properties/test_property_28_registration_validation.py`
     - **Property 28: Registration validation enforces email format, password length, uniqueness, and display name**
     - **Validates: Requirements 15.14, 15.15, 15.16**
 
-  - [ ] 4.6 Write property test for refresh-token exchange and revocation
+  - [x] 4.6 Write property test for refresh-token exchange and revocation
     - File: `tests/properties/test_property_29_refresh_token.py`
     - **Property 29: Refresh-token exchange and revocation**
     - **Validates: Requirements 15.8, 15.11, 15.12, 15.13**
 
-  - [ ] 4.7 Write property test for account lockout
+  - [x] 4.7 Write property test for account lockout
     - File: `tests/properties/test_property_30_account_lockout.py`
     - **Property 30: Account lockout after three consecutive failed logins**
     - **Validates: Requirements 15.4, 15.5, 15.6, 15.7**

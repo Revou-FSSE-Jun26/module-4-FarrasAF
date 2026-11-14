@@ -11,7 +11,10 @@ python_version = "3.14"
 strict = true
 exclude = ["venv/", "migrations/"]
 ignore_missing_imports = true
+explicit_package_bases = true
+mypy_path = "."
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-ra"
