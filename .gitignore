@@ -1,0 +1,13 @@
+venv/
+.env
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+node_modules/
+.next/
+.kiroignore
+task-management-project-brief.txt
+task-management-app.code-workspace

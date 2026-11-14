@@ -2,6 +2,23 @@
 
 All notable changes to the task-management-app spec are documented here. Versions are ordered newest-first. The version is bumped each time a spec document (requirements.md, design.md, or tasks.md) is changed.
 
+## v17 - 2026-11-13 - tasks.md created
+
+### Changes
+Implementation plan created (tasks.md). requirements.md, design.md, and the steering files were not modified, and no requirement, property, or endpoint was renumbered.
+
+- Added tasks.md: 19 top-level tasks covering backend foundation, models and migrations, authentication, RBAC and Teams, Activity, Boards, access control and Guest routes, Columns, Cards, Notifications and Comments, Search and Analytics, backend wiring and seed data, frontend foundation and UI, Playwright E2E, and checkpoints.
+- Each of the 39 correctness properties maps to exactly one optional backend property test sub-task (mapping listed in the tasks.md Notes).
+- Added a Task Dependency Graph of execution waves 0-22.
+
+### Reason
+The approved requirements and design needed an actionable, ordered coding plan before implementation starts. The version is bumped once because the header rule of this changelog increments the version whenever requirements.md, design.md, or tasks.md is changed.
+
+### Impact
+- Affected requirements: none (all requirements R1-R17 are referenced by at least one task).
+- Affected design components: none.
+- Affected implementation tasks: tasks.md added (implementation not started).
+
 ## v16 - 2026-11-13 - Property 33, version endpoint tags, link schema note, and BaseModel field cleanup
 
 ### Changes
