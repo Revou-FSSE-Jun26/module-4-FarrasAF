@@ -106,8 +106,8 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - `TrimmedStr` trims before the length check (for example `"  a  "` passes a `min=1, max=1` validator and `"   "` fails `min=1`)
     - _Requirements: 2.3, 4.2, 4.7_
 
-- [ ] 3. Checkpoint - Ensure all tests pass
-  - [-] 3.1 Run all checks and commit
+- [x] 3. Checkpoint - Ensure all tests pass
+  - [x] 3.1 Run all checks and commit
     - Backend (from `backend/`, venv active): `pytest`, `ruff check .`, `ruff format --check .`, `mypy .`
     - Frontend (from `frontend/`): `npm run lint`, `npm run build`, `npx playwright test` (skip while no E2E specs exist)
     - Fix every failure, ask the user if questions arise, then commit with the checkpoint number in the message
