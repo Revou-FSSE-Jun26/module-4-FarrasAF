@@ -148,7 +148,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - **Property 30: Account lockout after three consecutive failed logins**
     - **Validates: Requirements 15.4, 15.5, 15.6, 15.7**
 
-  - [ ] 4.8 Write property test for the authentication gate
+  - [x] 4.8 Write property test for the authentication gate
     - File: `tests/properties/test_property_22_auth_gate.py`
     - **Property 22: Authentication gate precedes authorization**
     - **Validates: Requirements 12.6, 15.9, 15.10**
