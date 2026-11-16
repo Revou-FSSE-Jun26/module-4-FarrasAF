@@ -192,18 +192,18 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - `tests/unit/test_teams.py`: creator is `team_admin`, join-link accept, expired link (R17.4), non-member members request (R16.5), preview returns only the Team name (R17.8), list shape (R17.9)
     - _Requirements: 16.1, 16.5, 17.3, 17.4, 17.8, 17.9_
 
-- [ ] 6. Activity_Service
-  - [ ] 6.1 Implement the `activity/` module
+- [x] 6. Activity_Service
+  - [x] 6.1 Implement the `activity/` module
     - `service.py`: `record_activity()` helper (adds to the session, never commits) for all eleven event types; paged read ordered `created_at DESC, id DESC`, 100 per page, zero-based page, negative or out-of-range page gives an empty page
     - `schema.py` (`page` strict integer), `routes.py` `GET /api/boards/{boardId}/activity` with `@require_role('member')`, response `{ items, page, pageSize }`; register Blueprint in `app.py`
     - _Requirements: 8.1, 8.12, 8.13, 8.14, 8.15_
 
-  - [ ] 6.2 Write property test for Activity pagination
+  - [x] 6.2 Write property test for Activity pagination
     - File: `tests/properties/test_property_18_activity_pagination.py`
     - **Property 18: Activity pagination visits each entry exactly once in order**
     - **Validates: Requirements 8.12, 8.15**
 
-  - [ ] 6.3 Write property test for Activity access
+  - [x] 6.3 Write property test for Activity access
     - File: `tests/properties/test_property_36_activity_access.py`
     - **Property 36: Activity is readable only by Members and Admins**
     - **Validates: Requirements 8.14**

@@ -3,6 +3,7 @@ from typing import Any
 from flask import Flask, Response, request
 from werkzeug.exceptions import HTTPException
 
+from flask_app.activity import activity_bp
 from flask_app.auth import auth_bp
 from flask_app.common.exceptions import (
     INTERNAL_ERROR,
@@ -53,5 +54,6 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(teams_bp)
+    app.register_blueprint(activity_bp)
     _register_error_handlers(app)
     return app
