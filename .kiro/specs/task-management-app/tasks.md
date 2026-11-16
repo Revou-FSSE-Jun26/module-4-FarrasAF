@@ -273,23 +273,23 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - `tests/unit/test_access.py`: non-Admin rejection (R10.7, R11.7), members list shape (R10.9), invitation list shape (R11.9), generate and revoke affect only the targeted link (R11.1, R11.2). Guest-route unit tests are in task 11.5
     - _Requirements: 10.7, 10.9, 11.1, 11.2, 11.7, 11.9_
 
-- [ ] 9. Column_Service
-  - [ ] 9.1 Implement the `columns/` module
+- [x] 9. Column_Service
+  - [x] 9.1 Implement the `columns/` module
     - `service.py`: create (append at end), rename, reorder (target index validated to `0..n-1`, contiguous reindex), delete (empty only, then reindex); lock the Board's Column rows with `with_for_update()` before reindexing; record `column_created` / `column_deleted` in the same transaction
     - `schema.py`, `routes.py` with `@require_role('admin')` per the Column_Service table; register Blueprint in `app.py`
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 8.8, 8.9_
 
-  - [ ] 9.2 Write property test for Column ordering
+  - [x] 9.2 Write property test for Column ordering
     - File: `tests/properties/test_property_01_column_ordering.py`
     - **Property 1: Column ordering is always contiguous from zero**
     - **Validates: Requirements 2.1, 2.3, 2.5**
 
-  - [ ] 9.3 Write property test for non-empty Column deletion
+  - [x] 9.3 Write property test for non-empty Column deletion
     - File: `tests/properties/test_property_09_nonempty_column_delete.py`
     - **Property 9: Non-empty column cannot be deleted**
     - **Validates: Requirements 2.4**
 
-  - [ ] 9.4 Write unit tests for the columns service
+  - [x] 9.4 Write unit tests for the columns service
     - `tests/unit/test_columns.py`: append index, rename, invalid name (R2.6), out-of-range reorder (R2.7), non-Admin rejection (R2.8), activity entries recorded
     - _Requirements: 2.1, 2.2, 2.6, 2.7, 2.8, 8.8, 8.9_
 

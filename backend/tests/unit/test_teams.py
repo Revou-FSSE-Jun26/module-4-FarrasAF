@@ -105,3 +105,12 @@ def test_list_teams_shape_and_roles(
     assert items["Own"]["id"] == own.id
     assert items["Own"]["current_user_team_role"] == "team_admin"
     assert items["Joined"]["current_user_team_role"] == "team_regular"
+
+
+def test_join_link_token_with_nul_byte_is_rejected(
+    db_session: Any, make_user: Callable[..., User]
+) -> None:
+    with pytest.raises(ValidationError):
+        preview_join_link_service("\x00")
+    with pytest.raises(ValidationError):
+        accept_join_link_service("ab\x00cd", make_user())

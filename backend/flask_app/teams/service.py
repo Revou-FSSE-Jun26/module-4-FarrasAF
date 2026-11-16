@@ -59,6 +59,8 @@ def _require_admin(team_id: UUID, user: User) -> None:
 
 
 def _get_valid_link(token: str) -> TeamJoinLink:
+    if "\x00" in token:
+        raise ValidationError(_INVALID_LINK)
     link: TeamJoinLink | None = db.session.scalar(
         select(TeamJoinLink).where(TeamJoinLink.token == token)
     )

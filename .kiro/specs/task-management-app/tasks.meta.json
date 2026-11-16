@@ -67,6 +67,14 @@
     "8.5 Write property test for role changes applying on the next request": {
       "status": "passed",
       "lastRunTimestamp": 1794820060911
+    },
+    "9.2 Write property test for Column ordering": {
+      "status": "passed",
+      "lastRunTimestamp": 1794822001463
+    },
+    "9.3 Write property test for non-empty Column deletion": {
+      "status": "passed",
+      "lastRunTimestamp": 1794822178177
     }
   },
   "executionHistory": {
@@ -657,6 +665,61 @@
         "executionId": "0abe04da-1941-4283-a753-5f85c725a467",
         "chatSessionId": "sess_627d3a4d-da34-4091-8dfa-e5ae7a0239ff",
         "timestamp": 1794820400234
+      }
+    ],
+    "9.1 Implement the `columns/` module": [
+      {
+        "executionId": "d9179ab5-4aa7-4ecf-be03-1e4123590bdb",
+        "chatSessionId": "sess_e95bd45f-6224-4c05-9439-c0d0d42a6ea9",
+        "timestamp": 1794820626260
+      },
+      {
+        "executionId": "d9179ab5-4aa7-4ecf-be03-1e4123590bdb",
+        "chatSessionId": "sess_e95bd45f-6224-4c05-9439-c0d0d42a6ea9",
+        "timestamp": 1794821745746
+      }
+    ],
+    "9.2 Write property test for Column ordering": [
+      {
+        "executionId": "40823043-6809-436b-98ae-13e566d28b7f",
+        "chatSessionId": "sess_9bd39abe-74e7-42d2-86e6-5dd27b507219",
+        "timestamp": 1794821880900
+      },
+      {
+        "executionId": "40823043-6809-436b-98ae-13e566d28b7f",
+        "chatSessionId": "sess_9bd39abe-74e7-42d2-86e6-5dd27b507219",
+        "timestamp": 1794822014691
+      }
+    ],
+    "9.3 Write property test for non-empty Column deletion": [
+      {
+        "executionId": "55cec61b-5bf5-467d-9356-4072411dc36d",
+        "chatSessionId": "sess_f18e28ae-ccfa-40ee-a153-c6ffb00cac3a",
+        "timestamp": 1794822081659
+      },
+      {
+        "executionId": "55cec61b-5bf5-467d-9356-4072411dc36d",
+        "chatSessionId": "sess_f18e28ae-ccfa-40ee-a153-c6ffb00cac3a",
+        "timestamp": 1794822189093
+      }
+    ],
+    "9.4 Write unit tests for the columns service": [
+      {
+        "executionId": "8eef4a46-e147-429b-ad89-aa5ee5d83c6d",
+        "chatSessionId": "sess_a848e019-92c6-4530-b3b7-f56038b6a289",
+        "timestamp": 1794822209349
+      },
+      {
+        "executionId": "8eef4a46-e147-429b-ad89-aa5ee5d83c6d",
+        "chatSessionId": "sess_a848e019-92c6-4530-b3b7-f56038b6a289",
+        "timestamp": 1794822445040
+      }
+    ],
+    "9. Column_Service": [
+      {
+        "executionId": "8eef4a46-e147-429b-ad89-aa5ee5d83c6d",
+        "chatSessionId": "sess_a848e019-92c6-4530-b3b7-f56038b6a289",
+        "timestamp": 1794822445417
       }
     ]
   }
