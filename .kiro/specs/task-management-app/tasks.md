@@ -208,38 +208,38 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - **Property 36: Activity is readable only by Members and Admins**
     - **Validates: Requirements 8.14**
 
-- [ ] 7. Board_Service
-  - [ ] 7.1 Implement the `boards/` module
+- [x] 7. Board_Service
+  - [x] 7.1 Implement the `boards/` module
     - `service.py`: create (Board + creator Admin `BoardMembership` + default Columns "To Do", "Doing", "Done" at 0, 1, 2 in one transaction; requester must be a Team_Member), list (caller's Boards, active by default, archived filter only for Admin Boards), get with `current_user_role`, atomic partial update (`name`, `description`, `visibility`), archive, restore (non-archived is a `ValidationError`), permanent delete with cascade
     - `schema.py`, `routes.py` per the Board_Service endpoint table (`visibility` stored with no access effect); register Blueprint in `app.py`
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 1.12, 1.13, 1.14_
 
-  - [ ] 7.2 Write property test for Board creation
+  - [x] 7.2 Write property test for Board creation
     - File: `tests/properties/test_property_32_board_creation.py`
     - **Property 32: Board creation grants the creator Admin effective immediately**
     - **Validates: Requirements 1.1, 1.11, 1.12**
 
-  - [ ] 7.3 Write property test for Board partial updates
+  - [x] 7.3 Write property test for Board partial updates
     - File: `tests/properties/test_property_05_board_partial_update.py`
     - **Property 5: Board partial update preserves omitted fields; invalid field rejects atomically**
     - **Validates: Requirements 1.3, 1.10**
 
-  - [ ] 7.4 Write property test for Board cascade delete
+  - [x] 7.4 Write property test for Board cascade delete
     - File: `tests/properties/test_property_10_board_cascade_delete.py`
     - **Property 10: Board permanent delete cascades completely**
     - **Validates: Requirements 1.6**
 
-  - [ ] 7.5 Write property test for the Board list
+  - [x] 7.5 Write property test for the Board list
     - File: `tests/properties/test_property_37_board_list.py`
     - **Property 37: Board list reflects the caller's Board roles and the archived filter**
     - **Validates: Requirements 1.13**
 
-  - [ ] 7.6 Write property test for visibility
+  - [x] 7.6 Write property test for visibility
     - File: `tests/properties/test_property_38_visibility_no_effect.py`
     - **Property 38: Visibility does not change who can access a Board**
     - **Validates: Requirements 1.14**
 
-  - [ ] 7.7 Write unit tests for the boards service
+  - [x] 7.7 Write unit tests for the boards service
     - `tests/unit/test_boards.py`: default columns (R1.2), archive/restore (R1.4, R1.5), restore of a non-archived Board (R1.9), non-Admin rejection (R1.7), invalid name (R1.8)
     - _Requirements: 1.2, 1.4, 1.5, 1.7, 1.8, 1.9_
 
