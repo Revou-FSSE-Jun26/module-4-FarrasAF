@@ -3,6 +3,7 @@ from typing import Any
 from flask import Flask, Response, request
 from werkzeug.exceptions import HTTPException
 
+from flask_app.access import access_bp
 from flask_app.activity import activity_bp
 from flask_app.auth import auth_bp
 from flask_app.boards import boards_bp
@@ -57,5 +58,6 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
     app.register_blueprint(teams_bp)
     app.register_blueprint(boards_bp)
     app.register_blueprint(activity_bp)
+    app.register_blueprint(access_bp)
     _register_error_handlers(app)
     return app

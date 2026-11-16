@@ -243,33 +243,33 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - `tests/unit/test_boards.py`: default columns (R1.2), archive/restore (R1.4, R1.5), restore of a non-archived Board (R1.9), non-Admin rejection (R1.7), invalid name (R1.8)
     - _Requirements: 1.2, 1.4, 1.5, 1.7, 1.8, 1.9_
 
-- [ ] 8. Access_Control_Service: members and invitations
-  - [ ] 8.1 Implement Board member management in `access/`
+- [x] 8. Access_Control_Service: members and invitations
+  - [x] 8.1 Implement Board member management in `access/`
     - `service.py`: list members, add member (`user_id` must be a Team_Member of the Board's Team, role `member`/`admin`, not already a member), change role, remove member (never leaving zero Admins); record `member_joined` / `member_removed` via `record_activity()` in the same transaction
     - `schema.py`, `routes.py` (`access_bp`) per the members endpoint table; roles read from stored membership so changes apply on the next request; register Blueprint in `app.py`
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 8.10, 8.11_
 
-  - [ ] 8.2 Implement Invitation_Link generate, list, and revoke
+  - [x] 8.2 Implement Invitation_Link generate, list, and revoke
     - `service.py`: generate (`secrets.token_urlsafe`), list, revoke (only that link becomes inactive; Admin only)
     - `routes.py`: invitation routes on `access_bp` with `@require_role('admin')`; register in `app.py`. The anonymous Guest routes and token resolution are implemented in task 11.3, after Comments exist
     - _Requirements: 11.1, 11.2, 11.7, 11.9_
 
-  - [ ] 8.3 Write property test for Board invitations
+  - [x] 8.3 Write property test for Board invitations
     - File: `tests/properties/test_property_33_board_invitations.py`
     - **Property 33: Board invitations require an eligible, not-already-member Team_Member**
     - **Validates: Requirements 10.1, 10.4, 10.5, 10.8**
 
-  - [ ] 8.4 Write property test for the last-Admin invariant
+  - [x] 8.4 Write property test for the last-Admin invariant
     - File: `tests/properties/test_property_23_last_admin.py`
     - **Property 23: Board retains at least one Admin**
     - **Validates: Requirements 10.6**
 
-  - [ ] 8.5 Write property test for role changes applying on the next request
+  - [x] 8.5 Write property test for role changes applying on the next request
     - File: `tests/properties/test_property_24_role_change_next_request.py`
     - **Property 24: Role changes apply on the next request from stored membership**
     - **Validates: Requirements 10.2, 10.3**
 
-  - [ ] 8.6 Write unit tests for members and invitations
+  - [x] 8.6 Write unit tests for members and invitations
     - `tests/unit/test_access.py`: non-Admin rejection (R10.7, R11.7), members list shape (R10.9), invitation list shape (R11.9), generate and revoke affect only the targeted link (R11.1, R11.2). Guest-route unit tests are in task 11.5
     - _Requirements: 10.7, 10.9, 11.1, 11.2, 11.7, 11.9_
 
