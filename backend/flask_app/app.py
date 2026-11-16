@@ -13,6 +13,7 @@ from flask_app.common.health import health_bp
 from flask_app.common.serialization import json_response, to_camel
 from flask_app.config import load_config
 from flask_app.extensions import db, migrate
+from flask_app.teams import teams_bp
 
 
 def _error_response(status: int, code: str, message: str, field: str | None = None) -> Response:
@@ -51,5 +52,6 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
     migrate.init_app(app, db)
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(teams_bp)
     _register_error_handlers(app)
     return app

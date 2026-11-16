@@ -15,6 +15,18 @@
     "4.6 Write property test for refresh-token exchange and revocation": {
       "status": "passed",
       "lastRunTimestamp": 1794640283780
+    },
+    "5.2 Write property test for RBAC decisions": {
+      "status": "passed",
+      "lastRunTimestamp": 1794811406935
+    },
+    "5.4 Write property test for Teams": {
+      "status": "passed",
+      "lastRunTimestamp": 1794811829073
+    },
+    "5.5 Write property test for Team_Join_Link lifecycle": {
+      "status": "passed",
+      "lastRunTimestamp": 1794811967929
     }
   },
   "executionHistory": {
@@ -301,6 +313,97 @@
         "executionId": "fc1d3086-9ff4-451d-84b9-bc3cd7055bfa",
         "chatSessionId": "sess_f32eac54-02c4-4ee4-a6f1-906fb121ab49",
         "timestamp": 1794643688284
+      }
+    ],
+    "4.9 Deploy the walking skeleton": [
+      {
+        "executionId": "ee0f92bb-c23f-49e2-ab20-e680ad54c76e",
+        "chatSessionId": "sess_c79df8cf-fa36-4ad4-bd74-24c0d5fdfb26",
+        "timestamp": 1794808061256
+      },
+      {
+        "executionId": "ee0f92bb-c23f-49e2-ab20-e680ad54c76e",
+        "chatSessionId": "sess_c79df8cf-fa36-4ad4-bd74-24c0d5fdfb26",
+        "timestamp": 1794808135638
+      }
+    ],
+    "5.1 Implement RBAC in `access/rbac.py`": [
+      {
+        "executionId": "4853dd8f-f95f-49c4-a7e4-79a7a9032569",
+        "chatSessionId": "sess_774301eb-e15b-402d-af9b-977f8f48c5be",
+        "timestamp": 1794810348975
+      },
+      {
+        "executionId": "4853dd8f-f95f-49c4-a7e4-79a7a9032569",
+        "chatSessionId": "sess_774301eb-e15b-402d-af9b-977f8f48c5be",
+        "timestamp": 1794811244295
+      }
+    ],
+    "5.2 Write property test for RBAC decisions": [
+      {
+        "executionId": "724e0af4-f80b-4418-92ca-9728f66903f1",
+        "chatSessionId": "sess_4f9a1800-ee35-4341-9768-44bfa9a6bf37",
+        "timestamp": 1794811301263
+      },
+      {
+        "executionId": "724e0af4-f80b-4418-92ca-9728f66903f1",
+        "chatSessionId": "sess_4f9a1800-ee35-4341-9768-44bfa9a6bf37",
+        "timestamp": 1794811419507
+      }
+    ],
+    "5.3 Implement the `teams/` module": [
+      {
+        "executionId": "dba49619-4cfb-4716-ab56-a72911d08dc7",
+        "chatSessionId": "sess_9ca37e1e-ac86-4fb1-a0df-2d8c56955f7c",
+        "timestamp": 1794811487170
+      },
+      {
+        "executionId": "dba49619-4cfb-4716-ab56-a72911d08dc7",
+        "chatSessionId": "sess_9ca37e1e-ac86-4fb1-a0df-2d8c56955f7c",
+        "timestamp": 1794811630923
+      }
+    ],
+    "5.4 Write property test for Teams": [
+      {
+        "executionId": "b22a1702-0f77-490b-be55-ad1f5f8f25e7",
+        "chatSessionId": "sess_6ac2b1aa-1a14-4e49-9597-39b3eda3396b",
+        "timestamp": 1794811713299
+      },
+      {
+        "executionId": "b22a1702-0f77-490b-be55-ad1f5f8f25e7",
+        "chatSessionId": "sess_6ac2b1aa-1a14-4e49-9597-39b3eda3396b",
+        "timestamp": 1794811843189
+      }
+    ],
+    "5.5 Write property test for Team_Join_Link lifecycle": [
+      {
+        "executionId": "6f5af114-60ea-448d-bd5c-93fc37950155",
+        "chatSessionId": "sess_3e442112-b85d-4085-86c1-4f1f72fc64d5",
+        "timestamp": 1794811885951
+      },
+      {
+        "executionId": "6f5af114-60ea-448d-bd5c-93fc37950155",
+        "chatSessionId": "sess_3e442112-b85d-4085-86c1-4f1f72fc64d5",
+        "timestamp": 1794811980982
+      }
+    ],
+    "5.6 Write unit tests for the teams service": [
+      {
+        "executionId": "e5e7fddb-ef7b-47b7-813a-a4eedda1da81",
+        "chatSessionId": "sess_271fcbf2-73de-472a-816e-f07b2e86b1b2",
+        "timestamp": 1794812026018
+      },
+      {
+        "executionId": "e5e7fddb-ef7b-47b7-813a-a4eedda1da81",
+        "chatSessionId": "sess_271fcbf2-73de-472a-816e-f07b2e86b1b2",
+        "timestamp": 1794812084605
+      }
+    ],
+    "5. RBAC and Team_Service": [
+      {
+        "executionId": "e5e7fddb-ef7b-47b7-813a-a4eedda1da81",
+        "chatSessionId": "sess_271fcbf2-73de-472a-816e-f07b2e86b1b2",
+        "timestamp": 1794812084973
       }
     ]
   }

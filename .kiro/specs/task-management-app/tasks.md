@@ -153,7 +153,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - **Property 22: Authentication gate precedes authorization**
     - **Validates: Requirements 12.6, 15.9, 15.10**
 
-  - [ ] 4.9 Deploy the walking skeleton
+  - [x] 4.9 Deploy the walking skeleton
     - Supabase: create the project with the Data API disabled (used only as plain PostgreSQL); copy the Session pooler connection string (port 5432), use the `postgresql+psycopg://` scheme with `sslmode=require`, and URL-encode special characters in the password
     - Render: create the Web Service with Root Directory `backend/`, native Python runtime (no Docker), build command `pip install -r requirements.txt`, start command `gunicorn "flask_app.app:create_app()"` (no default-format access log), `PYTHON_VERSION` set to a fully qualified 3.14 version (for example `3.14.3`), and environment variables `DATABASE_URL`, `JWT_SECRET_KEY`, `COOKIE_SECURE=true`, plus every other variable in `backend/.env.example`; debug off
     - Vercel: create the project with Root Directory `frontend/` and the server-side `API_URL` environment variable (not `NEXT_PUBLIC_`) pointing to the Render URL; the rewrites in `next.config.ts` are read at build time, so after changing `API_URL` the Vercel project must be redeployed
@@ -162,33 +162,33 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Create the root `README.md` if it does not exist yet and record the URLs (without secrets), the commands used, and the results under a "Deployment notes" heading
     - _Requirements: 14.2, 15.2_
 
-- [ ] 5. RBAC and Team_Service
-  - [ ] 5.1 Implement RBAC in `access/rbac.py`
+- [x] 5. RBAC and Team_Service
+  - [x] 5.1 Implement RBAC in `access/rbac.py`
     - Pure role-decision function (role + operation -> allow/deny) matching the capability matrix, and `@require_role('member' | 'admin')` that runs the authentication check first, resolves the Board from route parameters, and reads the role from stored `BoardMembership` (never the token)
     - `current_user()` helper; missing role raises `AuthorizationError`
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
 
-  - [ ] 5.2 Write property test for RBAC decisions
+  - [x] 5.2 Write property test for RBAC decisions
     - File: `tests/properties/test_property_21_rbac_matrix.py`
     - **Property 21: RBAC authorization decisions match the role capability matrix**
     - **Validates: Requirements 1.7, 2.8, 3.6, 4.6, 5.6, 8.14, 10.7, 11.4, 11.7, 12.1, 12.2, 12.3, 12.4, 12.5**
 
-  - [ ] 5.3 Implement the `teams/` module
+  - [x] 5.3 Implement the `teams/` module
     - `service.py`: create Team (creator becomes `team_admin`), list caller's Teams with `current_user_team_role`, list members (Team members only), generate/list/revoke Team_Join_Links (Team_Admin only, 7-day expiry, `is_expired` derived at read time), preview (generic invalid-link `ValidationError`), accept (single transaction, `team_regular`, already-member rejected)
     - `schema.py`, `routes.py` per the Team_Service endpoint table (all with `@token_required`); Team_Role read from stored `TeamMembership` on every request; register Blueprint in `app.py`
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8, 17.9_
 
-  - [ ] 5.4 Write property test for Teams
+  - [x] 5.4 Write property test for Teams
     - File: `tests/properties/test_property_31_teams.py`
     - **Property 31: Team creation, listing, membership, and access control**
     - **Validates: Requirements 16.1, 16.2, 16.3, 16.4, 16.5**
 
-  - [ ] 5.5 Write property test for Team_Join_Link lifecycle
+  - [x] 5.5 Write property test for Team_Join_Link lifecycle
     - File: `tests/properties/test_property_34_team_join_link.py`
     - **Property 34: Team_Join_Link lifecycle and access control**
     - **Validates: Requirements 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7**
 
-  - [ ] 5.6 Write unit tests for the teams service
+  - [x] 5.6 Write unit tests for the teams service
     - `tests/unit/test_teams.py`: creator is `team_admin`, join-link accept, expired link (R17.4), non-member members request (R16.5), preview returns only the Team name (R17.8), list shape (R17.9)
     - _Requirements: 16.1, 16.5, 17.3, 17.4, 17.8, 17.9_
 
