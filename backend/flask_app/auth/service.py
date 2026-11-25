@@ -11,7 +11,7 @@ import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 from flask import current_app
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from flask_app.common.exceptions import AuthenticationError, ValidationError
@@ -43,6 +43,10 @@ def _verify_password(password_hash: str, password: str) -> bool:
         return _hasher.verify(password_hash, password)
     except VerificationError, InvalidHashError:
         return False
+
+
+def hash_password(password: str) -> str:
+    return _hasher.hash(password)
 
 
 def hash_refresh_token(token: str) -> str:
@@ -170,3 +174,49 @@ def get_user_by_id(user_id: uuid.UUID) -> User:
 
 def me_service(user: User) -> dict[str, Any]:
     return user_identity(user)
+
+
+def update_profile_service(user: User, payload: dict[str, Any]) -> dict[str, Any]:
+    """Update the display name (the only editable profile field)."""
+    if "display_name" in payload:
+        user.display_name = payload["display_name"]
+        user.updated_at = utc_now()
+    db.session.commit()
+    return user_identity(user)
+
+
+def change_password_service(user: User, payload: dict[str, Any]) -> tuple[dict[str, Any], str, str]:
+    """Change the password, revoke all refresh tokens, and start a new session.
+
+    Returns (identity, access_token, refresh_token) for the route to set as cookies.
+    """
+    wrong = ValidationError("Current password is incorrect", field="current_password")
+    now = utc_now()
+    if user.locked_until is not None:
+        if user.locked_until > now:
+            raise wrong
+        user.locked_until = None
+        user.failed_login_attempts = 0
+    if not _verify_password(user.password_hash, payload["current_password"]):
+        user.failed_login_attempts += 1
+        if user.failed_login_attempts >= MAX_FAILED_LOGINS:
+            user.locked_until = now + timedelta(minutes=LOCKOUT_MINUTES)
+        db.session.commit()  # persist the counter even though the request fails
+        raise wrong
+    if payload["new_password"] == payload["current_password"]:
+        raise ValidationError(
+            "New password must differ from the current password", field="new_password"
+        )
+    user.password_hash = _hasher.hash(payload["new_password"])
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.updated_at = now
+    db.session.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user.id, RefreshToken.revoked.is_(False))
+        .values(revoked=True)
+    )
+    refresh_token = _issue_refresh_token(user)
+    access_token = create_access_token(user.id)
+    db.session.commit()
+    return user_identity(user), access_token, refresh_token

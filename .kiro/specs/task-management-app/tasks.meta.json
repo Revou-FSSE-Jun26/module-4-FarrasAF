@@ -75,6 +75,26 @@
     "9.3 Write property test for non-empty Column deletion": {
       "status": "passed",
       "lastRunTimestamp": 1794822178177
+    },
+    "10.3 Write property test for atomic Card edits": {
+      "status": "passed",
+      "lastRunTimestamp": 1794830169686
+    },
+    "10.4 Write property test for Assignee membership": {
+      "status": "passed",
+      "lastRunTimestamp": 1794830362242
+    },
+    "10.5 Write property test for Card ordering": {
+      "status": "passed",
+      "lastRunTimestamp": 1794830491685
+    },
+    "10.6 Write property test for position persistence": {
+      "status": "passed",
+      "lastRunTimestamp": 1794830846401
+    },
+    "11.4 Write property test for invitation links and Guest access": {
+      "status": "passed",
+      "lastRunTimestamp": 1794832872769
     }
   },
   "executionHistory": {
@@ -720,6 +740,492 @@
         "executionId": "8eef4a46-e147-429b-ad89-aa5ee5d83c6d",
         "chatSessionId": "sess_a848e019-92c6-4530-b3b7-f56038b6a289",
         "timestamp": 1794822445417
+      }
+    ],
+    "10.1 Implement Card create, read, edit, and delete": [
+      {
+        "executionId": "11d751a0-b0d9-470c-8e00-384282167903",
+        "chatSessionId": "sess_73738519-6207-4982-bfb6-e8b5134f7f4f",
+        "timestamp": 1794824747488
+      },
+      {
+        "executionId": "11d751a0-b0d9-470c-8e00-384282167903",
+        "chatSessionId": "sess_73738519-6207-4982-bfb6-e8b5134f7f4f",
+        "timestamp": 1794826603062
+      }
+    ],
+    "10.2 Implement Card move and reorder": [
+      {
+        "executionId": "3a5c35ca-9ba4-40ef-a2a4-622e1614f138",
+        "chatSessionId": "sess_6867c16b-63d3-4c5a-8326-c023e86ecd9f",
+        "timestamp": 1794826643795
+      },
+      {
+        "executionId": "3a5c35ca-9ba4-40ef-a2a4-622e1614f138",
+        "chatSessionId": "sess_6867c16b-63d3-4c5a-8326-c023e86ecd9f",
+        "timestamp": 1794830011270
+      }
+    ],
+    "10.3 Write property test for atomic Card edits": [
+      {
+        "executionId": "2d04f754-d35c-4e90-a058-3b1af5c7aeaa",
+        "chatSessionId": "sess_2b0b3dec-a13a-4465-93a6-3ecec12cad82",
+        "timestamp": 1794830065603
+      },
+      {
+        "executionId": "2d04f754-d35c-4e90-a058-3b1af5c7aeaa",
+        "chatSessionId": "sess_2b0b3dec-a13a-4465-93a6-3ecec12cad82",
+        "timestamp": 1794830183529
+      }
+    ],
+    "10.4 Write property test for Assignee membership": [
+      {
+        "executionId": "3def0c10-5224-486a-b547-9f6df3e87551",
+        "chatSessionId": "sess_1c447879-68a7-4fd8-adaf-26ad4af02728",
+        "timestamp": 1794830209118
+      },
+      {
+        "executionId": "3def0c10-5224-486a-b547-9f6df3e87551",
+        "chatSessionId": "sess_1c447879-68a7-4fd8-adaf-26ad4af02728",
+        "timestamp": 1794830374462
+      }
+    ],
+    "10.5 Write property test for Card ordering": [
+      {
+        "executionId": "d53f406e-64ff-456e-9f92-00a3529a01e0",
+        "chatSessionId": "sess_028b891b-826d-4d0c-b098-2d2d60d1fb23",
+        "timestamp": 1794830405886
+      },
+      {
+        "executionId": "d53f406e-64ff-456e-9f92-00a3529a01e0",
+        "chatSessionId": "sess_028b891b-826d-4d0c-b098-2d2d60d1fb23",
+        "timestamp": 1794830502657
+      }
+    ],
+    "10.6 Write property test for position persistence": [
+      {
+        "executionId": "f68e4308-6b86-4f56-904e-9bdd7278d1ad",
+        "chatSessionId": "sess_3c1dc3e5-e6b8-4952-80d8-ea416f1f95d6",
+        "timestamp": 1794830624029
+      },
+      {
+        "executionId": "f68e4308-6b86-4f56-904e-9bdd7278d1ad",
+        "chatSessionId": "sess_3c1dc3e5-e6b8-4952-80d8-ea416f1f95d6",
+        "timestamp": 1794830857341
+      }
+    ],
+    "11.1 Implement the `notifications/` module": [
+      {
+        "executionId": "6ba78765-50d4-4931-b4e7-73a10885204f",
+        "chatSessionId": "sess_3606d6a7-b31f-4335-a42a-2c0f27b3d9d0",
+        "timestamp": 1794831120781
+      },
+      {
+        "executionId": "6ba78765-50d4-4931-b4e7-73a10885204f",
+        "chatSessionId": "sess_3606d6a7-b31f-4335-a42a-2c0f27b3d9d0",
+        "timestamp": 1794831324075
+      }
+    ],
+    "11.2 Implement the `comments/` module with mentions": [
+      {
+        "executionId": "734f7e63-0b61-4a35-ad6c-e5f955586826",
+        "chatSessionId": "sess_c09c664d-24de-485e-85b5-b68e6d815831",
+        "timestamp": 1794831388579
+      },
+      {
+        "executionId": "734f7e63-0b61-4a35-ad6c-e5f955586826",
+        "chatSessionId": "sess_c09c664d-24de-485e-85b5-b68e6d815831",
+        "timestamp": 1794831548743
+      }
+    ],
+    "11.3 Implement the anonymous Guest routes": [
+      {
+        "executionId": "d70f0444-5d7c-4378-b39b-ee3c42ad82e9",
+        "chatSessionId": "sess_326e3f1e-da04-4518-9f93-29cc8ed37422",
+        "timestamp": 1794831619538
+      }
+    ],
+    "11.4 Write property test for invitation links and Guest access": [
+      {
+        "executionId": "fca6262b-6bba-4615-8bac-b5abd1de8feb",
+        "chatSessionId": "sess_eca272fb-dc82-4993-99cc-9451c8aa3a6f",
+        "timestamp": 1794832727431
+      },
+      {
+        "executionId": "fca6262b-6bba-4615-8bac-b5abd1de8feb",
+        "chatSessionId": "sess_eca272fb-dc82-4993-99cc-9451c8aa3a6f",
+        "timestamp": 1794832885595
+      }
+    ],
+    "12.1 Implement the `search/` module": [
+      {
+        "executionId": "44475f40-4c82-4003-b574-58fe42463229",
+        "chatSessionId": "sess_8adf57cc-256e-4a17-b380-902652a27080",
+        "timestamp": 1794832957906
+      },
+      {
+        "executionId": "44475f40-4c82-4003-b574-58fe42463229",
+        "chatSessionId": "sess_8adf57cc-256e-4a17-b380-902652a27080",
+        "timestamp": 1794833197291
+      }
+    ],
+    "12.2 Implement the `analytics/` module": [
+      {
+        "executionId": "ba3d9242-af51-40d4-aef0-8a05f4b1f786",
+        "chatSessionId": "sess_24154371-7943-48df-8648-18a6b77263d6",
+        "timestamp": 1794833542764
+      },
+      {
+        "executionId": "ba3d9242-af51-40d4-aef0-8a05f4b1f786",
+        "chatSessionId": "sess_24154371-7943-48df-8648-18a6b77263d6",
+        "timestamp": 1794833715104
+      }
+    ],
+    "13.1 Finalize app wiring, logging, and the seed script": [
+      {
+        "executionId": "4f53ae2f-aab5-4ed5-be28-af099fc5c22e",
+        "chatSessionId": "sess_1e116f7c-c0e0-4538-ac6b-14e1d63c5a28",
+        "timestamp": 1794833794455
+      },
+      {
+        "executionId": "4f53ae2f-aab5-4ed5-be28-af099fc5c22e",
+        "chatSessionId": "sess_1e116f7c-c0e0-4538-ac6b-14e1d63c5a28",
+        "timestamp": 1794834137400
+      }
+    ],
+    "15.1 Create API types and the typed API client": [
+      {
+        "executionId": "98170c05-c8bc-4dce-8372-ed5f9157a278",
+        "chatSessionId": "sess_93192b6e-de88-497a-a419-ef4635b416c8",
+        "timestamp": 1794834400605
+      },
+      {
+        "executionId": "98170c05-c8bc-4dce-8372-ed5f9157a278",
+        "chatSessionId": "sess_93192b6e-de88-497a-a419-ef4635b416c8",
+        "timestamp": 1794834785647
+      }
+    ],
+    "15.2 Create shared primitives and state components": [
+      {
+        "executionId": "8771417c-eaaf-4a7c-bb77-1ff15aa8705a",
+        "chatSessionId": "sess_d5563f92-1414-4aa4-9734-0d745fd9a491",
+        "timestamp": 1794834974296
+      },
+      {
+        "executionId": "8771417c-eaaf-4a7c-bb77-1ff15aa8705a",
+        "chatSessionId": "sess_d5563f92-1414-4aa4-9734-0d745fd9a491",
+        "timestamp": 1794835099963
+      }
+    ],
+    "15.3 Implement authentication UI and the app shell": [
+      {
+        "executionId": "f3f64fd9-7b43-4090-bd16-342b02cd372d",
+        "chatSessionId": "sess_00ba1f24-a55b-45d0-8d0a-2a0fbce8f416",
+        "timestamp": 1794835176849
+      },
+      {
+        "executionId": "f3f64fd9-7b43-4090-bd16-342b02cd372d",
+        "chatSessionId": "sess_00ba1f24-a55b-45d0-8d0a-2a0fbce8f416",
+        "timestamp": 1794835367807
+      }
+    ],
+    "15. Frontend foundation": [
+      {
+        "executionId": "f3f64fd9-7b43-4090-bd16-342b02cd372d",
+        "chatSessionId": "sess_00ba1f24-a55b-45d0-8d0a-2a0fbce8f416",
+        "timestamp": 1794835368333
+      },
+      {
+        "executionId": "7f619291-a09a-4bdf-8036-4adcdcf03a95",
+        "chatSessionId": "sess_12001006-4b89-4f4e-8522-f950a87d63f2",
+        "timestamp": 1795160350097
+      }
+    ],
+    "16.1 Implement Teams pages and join flow": [
+      {
+        "executionId": "08b9cb26-26b5-482b-918a-a497cd76d5ad",
+        "chatSessionId": "sess_d2d9490b-31a5-4ed4-a53f-63d8ff936db1",
+        "timestamp": 1794835453689
+      },
+      {
+        "executionId": "08b9cb26-26b5-482b-918a-a497cd76d5ad",
+        "chatSessionId": "sess_d2d9490b-31a5-4ed4-a53f-63d8ff936db1",
+        "timestamp": 1794835722859
+      }
+    ],
+    "16. Teams UI": [
+      {
+        "executionId": "08b9cb26-26b5-482b-918a-a497cd76d5ad",
+        "chatSessionId": "sess_d2d9490b-31a5-4ed4-a53f-63d8ff936db1",
+        "timestamp": 1794835723825
+      }
+    ],
+    "17.1 Implement Board list and settings pages": [
+      {
+        "executionId": "121fcdfa-7c71-424f-87ad-869bbcbc797c",
+        "chatSessionId": "sess_fd53201c-38b0-4dec-bd95-76967233da3b",
+        "timestamp": 1794835844133
+      },
+      {
+        "executionId": "121fcdfa-7c71-424f-87ad-869bbcbc797c",
+        "chatSessionId": "sess_fd53201c-38b0-4dec-bd95-76967233da3b",
+        "timestamp": 1794836136317
+      }
+    ],
+    "17.2 Implement the Board view": [
+      {
+        "executionId": "03486c16-99d8-4772-bdac-5069c48d8b93",
+        "chatSessionId": "sess_611dadc9-ae39-49e7-9203-9c6a08ede83f",
+        "timestamp": 1794836283532
+      },
+      {
+        "executionId": "b37ef321-465f-4222-8933-2cfbff66c19f",
+        "chatSessionId": "sess_611dadc9-ae39-49e7-9203-9c6a08ede83f",
+        "timestamp": 1794836822286
+      }
+    ],
+    "11.10 Write property test for Comment ownership": [
+      {
+        "executionId": "294f471d-498e-4ea1-94ce-bf0c058dad27",
+        "chatSessionId": "sess_8e663b6a-c647-4beb-a377-7c9c2e589394",
+        "timestamp": 1794836931696
+      },
+      {
+        "executionId": "294f471d-498e-4ea1-94ce-bf0c058dad27",
+        "chatSessionId": "sess_8e663b6a-c647-4beb-a377-7c9c2e589394",
+        "timestamp": 1794837016039
+      }
+    ],
+    "11.13 Write unit tests for notifications and comments": [
+      {
+        "executionId": "05e62082-ef45-49db-8fc8-67c749405c18",
+        "chatSessionId": "sess_adbce73a-ab1d-4110-87e0-50683820c61d",
+        "timestamp": 1794837098325
+      },
+      {
+        "executionId": "05e62082-ef45-49db-8fc8-67c749405c18",
+        "chatSessionId": "sess_adbce73a-ab1d-4110-87e0-50683820c61d",
+        "timestamp": 1794837214899
+      }
+    ],
+    "17.3 Implement drag-and-drop": [
+      {
+        "executionId": "e118514e-e2a2-446a-ae7e-b3ac8f0486f4",
+        "chatSessionId": "sess_c13c01dd-74da-4cdb-bc04-24ab1c034f48",
+        "timestamp": 1794838286003
+      },
+      {
+        "executionId": "e118514e-e2a2-446a-ae7e-b3ac8f0486f4",
+        "chatSessionId": "sess_c13c01dd-74da-4cdb-bc04-24ab1c034f48",
+        "timestamp": 1794838523533
+      }
+    ],
+    "17.4 Implement the Card detail modal": [
+      {
+        "executionId": "c1aceffe-aafa-4fcf-af7b-fe772e2caf57",
+        "chatSessionId": "sess_14c78f70-f652-4be2-a4b3-b54f2f19ff80",
+        "timestamp": 1794838588250
+      },
+      {
+        "executionId": "c1aceffe-aafa-4fcf-af7b-fe772e2caf57",
+        "chatSessionId": "sess_14c78f70-f652-4be2-a4b3-b54f2f19ff80",
+        "timestamp": 1794838818657
+      }
+    ],
+    "17.5 Implement Comments and Mentions": [
+      {
+        "executionId": "9022a8ae-babf-4f33-9e70-b8a9b03c8024",
+        "chatSessionId": "sess_59711bc8-0b48-4dc9-9b49-c0501c5d46d4",
+        "timestamp": 1794838919701
+      },
+      {
+        "executionId": "9022a8ae-babf-4f33-9e70-b8a9b03c8024",
+        "chatSessionId": "sess_59711bc8-0b48-4dc9-9b49-c0501c5d46d4",
+        "timestamp": 1794839051497
+      }
+    ],
+    "17.6 Implement the Notification bell": [
+      {
+        "executionId": "20e87c89-7a3c-45be-a294-63a4d2d5920c",
+        "chatSessionId": "sess_43ab7022-1be4-4ee0-9259-5c053f1f4171",
+        "timestamp": 1794839104050
+      },
+      {
+        "executionId": "20e87c89-7a3c-45be-a294-63a4d2d5920c",
+        "chatSessionId": "sess_43ab7022-1be4-4ee0-9259-5c053f1f4171",
+        "timestamp": 1794839293178
+      }
+    ],
+    "17.7 Implement Search, Activity, and Analytics pages": [
+      {
+        "executionId": "197d0744-65f4-4bee-9a87-f8a193178d41",
+        "chatSessionId": "sess_41ccb2af-7d09-4d71-ac49-c68ab138b591",
+        "timestamp": 1794839372520
+      }
+    ],
+    "17.8 Implement the Guest page": [
+      {
+        "executionId": "e422b95a-24ba-4aae-bd85-9abc31f6cb8e",
+        "chatSessionId": "sess_d3853a18-a18a-4c3c-ab76-c3300736b7b2",
+        "timestamp": 1794919098289
+      },
+      {
+        "executionId": "e422b95a-24ba-4aae-bd85-9abc31f6cb8e",
+        "chatSessionId": "sess_d3853a18-a18a-4c3c-ab76-c3300736b7b2",
+        "timestamp": 1794919464053
+      }
+    ],
+    "17. Boards, Cards, and collaboration UI": [
+      {
+        "executionId": "e422b95a-24ba-4aae-bd85-9abc31f6cb8e",
+        "chatSessionId": "sess_d3853a18-a18a-4c3c-ab76-c3300736b7b2",
+        "timestamp": 1794919465110
+      }
+    ],
+    "19.1 Create E2E fixtures and helpers": [
+      {
+        "executionId": "241e74b1-7969-4532-a90a-32a66b1c866e",
+        "chatSessionId": "sess_09a60ff2-ea28-4bff-b184-22acbb86e069",
+        "timestamp": 1794922626514
+      },
+      {
+        "executionId": "241e74b1-7969-4532-a90a-32a66b1c866e",
+        "chatSessionId": "sess_09a60ff2-ea28-4bff-b184-22acbb86e069",
+        "timestamp": 1794922952386
+      }
+    ],
+    "19.2 Write auth E2E tests": [
+      {
+        "executionId": "6151deeb-a771-4ce7-a8ef-20882bc01282",
+        "chatSessionId": "sess_4ca21fd9-dab8-4f6c-bb1f-87454661926e",
+        "timestamp": 1794924996572
+      }
+    ],
+    "19.4 Write Board, Column, and Card CRUD E2E tests": [
+      {
+        "executionId": "89633251-1681-4939-ab2e-4a3b9f319da0",
+        "chatSessionId": "sess_ab5e78b7-2612-4c31-aceb-48ddfee85439",
+        "timestamp": 1794970951171
+      },
+      {
+        "executionId": "89633251-1681-4939-ab2e-4a3b9f319da0",
+        "chatSessionId": "sess_ab5e78b7-2612-4c31-aceb-48ddfee85439",
+        "timestamp": 1794971199120
+      }
+    ],
+    "19.5 Write drag-and-drop E2E tests": [
+      {
+        "executionId": "fd1f1607-dae3-44a4-a4a4-f85330ef0459",
+        "chatSessionId": "sess_2ac51f66-f7c7-46de-845b-4e9dfeeeee86",
+        "timestamp": 1794972985891
+      },
+      {
+        "executionId": "fd1f1607-dae3-44a4-a4a4-f85330ef0459",
+        "chatSessionId": "sess_2ac51f66-f7c7-46de-845b-4e9dfeeeee86",
+        "timestamp": 1794973203458
+      }
+    ],
+    "4.10 Implement the Profile endpoints in the `auth/` module": [
+      {
+        "executionId": "07ce0b69-e45a-4e36-b4ae-7b3b94c5d168",
+        "chatSessionId": "sess_d33bc02c-3333-45b5-b1ae-7ba99de387f1",
+        "timestamp": 1795158569459
+      },
+      {
+        "executionId": "07ce0b69-e45a-4e36-b4ae-7b3b94c5d168",
+        "chatSessionId": "sess_d33bc02c-3333-45b5-b1ae-7ba99de387f1",
+        "timestamp": 1795158696088
+      }
+    ],
+    "4.11 Write unit tests for the Profile service": [
+      {
+        "executionId": "7c3cb3ca-0648-4ff8-b717-67d55e0226bb",
+        "chatSessionId": "sess_b5cf0fd9-0401-41d7-91e2-8d8ab30262a2",
+        "timestamp": 1795158764238
+      },
+      {
+        "executionId": "7c3cb3ca-0648-4ff8-b717-67d55e0226bb",
+        "chatSessionId": "sess_b5cf0fd9-0401-41d7-91e2-8d8ab30262a2",
+        "timestamp": 1795159499660
+      }
+    ],
+    "4.12 Write property test for Profile updates": [
+      {
+        "executionId": "1c5f7c19-7d5a-4e9c-9c15-20e93fec292c",
+        "chatSessionId": "sess_41c15471-b78e-4ffb-b842-d928bcfd7c6b",
+        "timestamp": 1795159621348
+      },
+      {
+        "executionId": "1c5f7c19-7d5a-4e9c-9c15-20e93fec292c",
+        "chatSessionId": "sess_41c15471-b78e-4ffb-b842-d928bcfd7c6b",
+        "timestamp": 1795159896225
+      }
+    ],
+    "4. Authentication_Service": [
+      {
+        "executionId": "1c5f7c19-7d5a-4e9c-9c15-20e93fec292c",
+        "chatSessionId": "sess_41c15471-b78e-4ffb-b842-d928bcfd7c6b",
+        "timestamp": 1795159896674
+      }
+    ],
+    "15.5 Implement the profile page": [
+      {
+        "executionId": "7f619291-a09a-4bdf-8036-4adcdcf03a95",
+        "chatSessionId": "sess_12001006-4b89-4f4e-8522-f950a87d63f2",
+        "timestamp": 1795159981798
+      },
+      {
+        "executionId": "7f619291-a09a-4bdf-8036-4adcdcf03a95",
+        "chatSessionId": "sess_12001006-4b89-4f4e-8522-f950a87d63f2",
+        "timestamp": 1795160349397
+      }
+    ],
+    "19.6 Write Comment, Mention, and Notification E2E tests": [
+      {
+        "executionId": "ccb8d885-a100-4039-a988-4c9db7833392",
+        "chatSessionId": "sess_8c5a1cdc-5260-48d7-973e-2334ac1cc276",
+        "timestamp": 1795414021122
+      },
+      {
+        "executionId": "ccb8d885-a100-4039-a988-4c9db7833392",
+        "chatSessionId": "sess_8c5a1cdc-5260-48d7-973e-2334ac1cc276",
+        "timestamp": 1795415007933
+      }
+    ],
+    "19.7 Write search E2E tests": [
+      {
+        "executionId": "52213ab4-8b7a-400e-8ba5-d15b950219ee",
+        "chatSessionId": "sess_7e6ca285-341c-417a-94e7-c99baa2ec233",
+        "timestamp": 1795415196520
+      },
+      {
+        "executionId": "52213ab4-8b7a-400e-8ba5-d15b950219ee",
+        "chatSessionId": "sess_7e6ca285-341c-417a-94e7-c99baa2ec233",
+        "timestamp": 1795415294346
+      }
+    ],
+    "19.8 Write Guest access E2E tests": [
+      {
+        "executionId": "ba203b7c-74cc-4d74-a811-a4af82de4a20",
+        "chatSessionId": "sess_775a68d9-f559-4178-a5d9-4799a5ab0698",
+        "timestamp": 1795415338115
+      },
+      {
+        "executionId": "ba203b7c-74cc-4d74-a811-a4af82de4a20",
+        "chatSessionId": "sess_775a68d9-f559-4178-a5d9-4799a5ab0698",
+        "timestamp": 1795415408745
+      }
+    ],
+    "19.9 Write responsive layout E2E tests": [
+      {
+        "executionId": "31edae43-9a6d-4582-9a24-b5b4ee4a798c",
+        "chatSessionId": "sess_f3de5b9c-ad5f-43fe-9776-e46d62360962",
+        "timestamp": 1795415450570
+      },
+      {
+        "executionId": "31edae43-9a6d-4582-9a24-b5b4ee4a798c",
+        "chatSessionId": "sess_f3de5b9c-ad5f-43fe-9776-e46d62360962",
+        "timestamp": 1795415545416
       }
     ]
   }

@@ -113,7 +113,7 @@ Role resolution reads the stored `BoardMembership` (and, for Team-scoped endpoin
 
 | Service | Responsibility | Primary Requirements |
 | --- | --- | --- |
-| Authentication_Service | Registration (account only, no auto-login), login (sets auth cookies, returns identity), logout (refresh-token revocation, clears cookies), JWT access-token issuance, token refresh, auth enforcement | R15, R12.6 |
+| Authentication_Service | Registration (account only, no auto-login), login (sets auth cookies, returns identity), logout (refresh-token revocation, clears cookies), JWT access-token issuance, token refresh, auth enforcement, Profile (display name edit, password change) | R15, R18, R12.6 |
 | Team_Service | Team creation, Team membership listing, Team_Join_Link lifecycle (generate/revoke/list/preview/accept) | R16, R17 |
 | Access_Control_Service | RBAC decisions from stored membership, Board membership/role management, invitation link lifecycle & validation, anonymous Guest read access | R10, R11, R12 |
 | Board_Service | Board create/update/archive/restore/permanent-delete, default columns, settings | R1 |
@@ -186,12 +186,13 @@ backend/flask_app/
 
 All application code lives under `frontend/src/` (`app/` for App Router pages, `components/` with `shared/` Base* primitives, `hooks/`, `lib/`, `types/api.ts`); Playwright E2E tests live in `frontend/e2e/`. Imports use the `@/` alias mapped to `src/`.
 
-- **App Router pages:** `/login`, `/register`, `/teams` (Team list and creation), `/teams/[teamId]` (members and join links), `/join/[token]` (accept a Team_Join_Link, login required), `/boards`, `/boards/[boardId]` (board view with columns/cards + drag-and-drop), `/boards/[boardId]/activity`, `/boards/[boardId]/analytics`, `/boards/[boardId]/settings`, `/invite/[token]` (anonymous Guest view, calls `/api/guest/...`), `/search`.
+- **App Router pages:** `/login`, `/register`, `/teams` (Team list and creation), `/teams/[teamId]` (members and join links), `/join/[token]` (accept a Team_Join_Link, login required), `/boards`, `/boards/[boardId]` (board view with columns/cards + drag-and-drop), `/boards/[boardId]/activity`, `/boards/[boardId]/analytics`, `/boards/[boardId]/settings`, `/invite/[token]` (anonymous Guest view, calls `/api/guest/...`), `/search`, `/profile` (the signed-in User's Profile: read-only email, display name form, change-password form; linked from the primary navigation; R18.11).
 - **State/data:** One typed API client in `src/lib/apiClient.ts` that calls same-origin `/api/...` paths (proxied to the backend by Next.js rewrites, never the backend URL). Authentication relies on `HttpOnly` cookies the browser sends automatically; the client never reads, stores, or attaches tokens, and nothing goes in `localStorage`/`sessionStorage`. On a `401` it calls the refresh endpoint once and retries, except on the auth endpoints and public pages. API request/response types are camelCase and live in `src/types/api.ts`. Board responses carry `currentUserRole` (`admin | member | guest`) and Team responses carry `currentUserTeamRole`; `GET /api/auth/me` returns identity only. The client never decodes tokens.
 - **Notifications:** Polled on an interval through `useNotifications`. Each poll requests the newest page **without a cursor**; `nextCursor` is used only to load older pages on demand (R6.2, R6.6).
 - **Drag-and-drop:** Uses `@dnd-kit/core` + `@dnd-kit/sortable`. A hook computes the target column id and target order index, then calls the move endpoint; UI optimistically reorders and reconciles with the server's authoritative positions, rolling back on error (R4.3, R13).
 - **Mentions:** The mention picker inserts the token `@[<userId>]` into the Comment body when the user picks a Board member from `GET /api/boards/{boardId}/members`, and renders each token as `@displayName` (as plain text) by looking the id up in that members list, or as `@unknown` when the id is not found.
 - **Token pages:** `/invite/[token]` and `/join/[token]` send `Referrer-Policy: no-referrer` (configured in `next.config.ts`) and never leak the token into links, analytics, or storage.
+- **Error handling and toasts (R14.6 to R14.9):** One pure helper, `src/lib/errorHandler.ts`, turns any thrown value into UI text: `getErrorMessage(err, fallback)` returns the backend `error.message` only for an `ApiError` with a 4xx status (R14.7); a 5xx status, a network failure, or any other exception returns the caller's fixed `fallback`, or the generic "Something went wrong. Please try again.", and never the underlying text. `logError(err, context)` writes to `console.error` only when `NODE_ENV !== "production"`, so production builds log nothing (R14.9). `BaseToastProvider` (mounted in the root layout) exposes `useToast()` with `showToast(message, variant)` and `showError(err, fallback)`; it shows at most 3 toasts, ignores a message already on screen, and registers `window` `unhandledrejection` and `error` listeners as a safety net for errors no `catch` handles. Failed actions and background failures (move, save, delete, create, comment, mark-read, copy link, polling) show a toast through hooks and forms (R14.6). Page-load failures keep the `BaseErrorState` view with a retry button and also show a toast. Field validation stays inline next to the field. Login keeps its single generic inline message for 4xx responses (R15.3) and shows a toast for 5xx and network failures. Polling shows one toast per outage, not one per retry. The `/invite/[token]` 403 keeps its plain "link not available" message without a toast. Error boundaries: `app/error.tsx` and `app/(app)/error.tsx` (the second keeps the navigation bar visible), `app/global-error.tsx` (replaces the root layout, inline styles only), and `app/not-found.tsx` render `BaseErrorFallback` with a generic message, a retry action (where applicable), and a link home. The caught error is logged in development only and is never rendered (R14.8, R14.9).
 - **Responsive layout:** Tailwind breakpoints (`lg:` = 1024px) render a horizontally laid out board at >= 1024px and a stacked/scrollable-per-column layout below it, avoiding horizontal page scroll and overlap (R14.3, R14.4).
 
 ## Data Models
@@ -227,6 +228,7 @@ erDiagram
 - `failed_login_attempts` (int, default `0`) — count of consecutive failed login attempts for the account; incremented on each failed login and reset to zero on a successful login (R15.4, R15.6).
 - `locked_until` (timestamp, nullable, UTC) — when set and in the future, the account is locked and all login attempts are rejected; cleared on a successful login and effectively lifted once the timestamp has elapsed (R15.4, R15.5, R15.7).
 - Unique constraint on `email` enforces R15.15. Password stored only as hash (R15.1).
+- Profile (R18): `display_name` and `password_hash` are the only columns a User can change themselves; `email` is immutable in V1 (R18.4). No new columns or migration are needed.
 - Lockout tracking: a failed login increments `failed_login_attempts` and, when the counter reaches 3, sets `locked_until = now + 15 minutes` (R15.4). A successful login sets `failed_login_attempts = 0` and clears `locked_until` (R15.6). Login handling treats an account as locked whenever `locked_until` is set and greater than the current time; once that window elapses, login is accepted again and the counter resets to zero (R15.5, R15.7).
 
 **RefreshToken** — issued refresh credential enabling access-token minting.
@@ -291,7 +293,7 @@ Implementation uses a conditional `UPDATE ... WHERE id = :id AND version = :expe
 
 All endpoints are REST over HTTPS, use JSON bodies, and (except the public endpoints noted below) require a valid Access_Token read from its `HttpOnly` cookie; unauthenticated requests get `401` before role evaluation (R12.6). Board-scoped endpoints additionally pass the RBAC gate, which reads the caller's role from stored `BoardMembership`. State-changing requests never use GET.
 
-The only public (no-auth) endpoints are: `GET /api/health`; `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, and `POST /api/auth/logout` (the last two authenticated by the refresh cookie); and the Guest routes under `/api/guest/<token>/...` (GET only).
+The only public (no-auth) endpoints are (besides the development-only API documentation routes described under "API Documentation" below): `GET /api/health`; `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, and `POST /api/auth/logout` (the last two authenticated by the refresh cookie); and the Guest routes under `/api/guest/<token>/...` (GET only).
 
 Common conventions:
 - **camelCase JSON.** Request and response JSON use camelCase; the database and Python use snake_case. Conversion happens only in `common/serialization.py` (`read_json`, `read_query`, `json_response`). Only keys are camelCased, never enum values (which are sent exactly as stored, e.g. `team_admin`, `card_moved`).
@@ -301,7 +303,7 @@ Common conventions:
 - **Pagination.** Collection ordering and caps are server-enforced: Notifications cursor-based (50/page), Activity page-index (100/page), Search capped at 100.
 - **Role fields.** Board responses include `currentUserRole` (`admin | member | guest`); Team responses include `currentUserTeamRole` (`team_admin | team_regular`).
 
-### Authentication_Service (R15)
+### Authentication_Service (R15, R18)
 
 | Method | Path | Auth | Purpose | Requirements |
 | --- | --- | --- | --- | --- |
@@ -309,9 +311,15 @@ Common conventions:
 | POST | `/api/auth/login` | none (public) | Verify credentials; enforce lockout; set both auth cookies; return user identity; generic error on failure | R15.2, R15.3, R15.4, R15.5 |
 | POST | `/api/auth/logout` | refresh cookie | Revoke the caller's refresh token; clear both cookies | R15.8 |
 | POST | `/api/auth/refresh` | refresh cookie | Exchange a valid, non-revoked, non-expired refresh token for a new access token (identity only) | R15.11, R15.12, R15.13 |
-| GET | `/api/auth/me` | access cookie | Return current user identity only (id, email, displayName) | R15.10, R15.13 |
+| GET | `/api/auth/me` | access cookie | Return current user identity only (id, email, displayName) | R15.10, R15.13, R18.1, R18.10 |
+| PATCH | `/api/auth/me` | access cookie | Update the caller's display name (`{ displayName }`, 1–50 trimmed); any other field, including `email`, is rejected; returns the User identity | R18.2, R18.3, R18.4, R18.5, R18.10 |
+| POST | `/api/auth/me/password` | access cookie | Change the caller's password (`{ currentPassword, newPassword }`); revokes all refresh tokens, sets new auth cookies, returns the User identity | R18.6, R18.7, R18.8, R18.9, R18.10 |
 
 Registration creates an account only; it does not log the user in and issues no tokens. Login verifies credentials, enforces account lockout, sets the `HttpOnly` access and refresh cookies, and returns the user identity (never a token in the body) (R15.2). Login failure returns a single generic `authentication error` that does not reveal whether email or password was wrong (R15.3). Login also enforces account lockout: while an account's `locked_until` is in the future the login is rejected with the same generic authentication error and no tokens are issued, even when the submitted credentials are valid and without revealing that the account is locked (R15.4, R15.5). Logout is authenticated by the refresh cookie, revokes the stored refresh token, and clears both cookies (R15.8). Refresh exchanges a valid, non-revoked, non-expired refresh token for a new access token carrying identity only (no role claims, R15.13); a revoked/expired/invalid refresh token is rejected with an authentication error and no token issued (R15.12). `GET /api/auth/me` returns identity only; roles are read per request from stored membership and surfaced on Board and Team responses, not here.
+
+Profile (R18). Both Profile endpoints live in the `auth/` module (`update_profile_service`, `change_password_service`), use `@token_required`, and have no version field (`version` stays limited to Card and Comment, R13). `PATCH /api/auth/me` uses a Marshmallow schema with `unknown = RAISE` that accepts only `displayName` (trimmed, 1–50); an `email` key (or any other key) fails with a `ValidationError` naming the field, so the email is immutable in V1 (R18.4). Display names are read from the `users` row on every request, so a rename shows up in all later Board member, Team member, Comment, and Activity responses with no extra work (R18.5).
+
+`POST /api/auth/me/password` runs these steps in order, in one transaction (except the failed-attempt counter, see step 2): (1) schema validation: `newPassword` of at least 8 characters, never trimmed; a shorter value is rejected before the current password is checked and is not counted as a failed attempt (R18.9); (2) current-password check: if the account is locked (`locked_until` in the future) or the argon2 verification fails, the service raises the same `ValidationError` (`field: "currentPassword"`, message "Current password is incorrect"), so the lock state is not revealed (R18.8); a failed verification increments `failed_login_attempts` and, on the third consecutive failure, sets `locked_until` exactly as login does, and that counter update is persisted in its own commit before the error is raised, as the login failure path does, so the central rollback does not undo it (R18.7); (3) the new password must differ from the current one, otherwise `ValidationError` on `newPassword` without counting a failed attempt (R18.9); (4) on success the argon2 hash is replaced, `failed_login_attempts` is reset and `locked_until` cleared (R18.6), every `RefreshToken` of the User is marked `revoked`, and a new access/refresh cookie pair is issued with `set_auth_cookies()` so the requesting client stays logged in (R18.11). The refresh cookie is scoped to `/api/auth/refresh` and `/api/auth/logout`, so the server cannot read the caller's current refresh token on this route; revoking all of them and issuing a fresh one is what keeps the caller signed in. Other devices lose the ability to mint access tokens immediately, but an access token already issued to them stays valid until its 15-minute expiry because access tokens are stateless. A wrong current password is a `400 ValidationError`, not a `401`, so the frontend client does not treat it as an expired session and run its refresh-and-redirect path. Passwords and hashes are never logged or returned.
 
 ### Board_Service (R1)
 
@@ -423,6 +431,12 @@ Response: `{ totalCards, perColumn: [{columnId, count}], completionRate, activit
 
 Any authenticated User creates a Team and becomes its `team_admin` (R16.1). `GET /api/teams` and `GET /api/teams/{teamId}/members` are restricted to Team_Members; a non-member requesting members is rejected with an authorization error (R16.5). Team_Role comes from stored `TeamMembership` on every request (R16.6). Only a Team_Admin may generate, list, or revoke join links (R17.6). The join-link responses (create, list, and revoke) all use the `TeamJoinLink` schema, which includes the derived field `isExpired` (computed on the server at read time — `expiresAt` is in the past — and never stored) alongside `id`, `teamId`, `token`, `status`, `expiresAt`, and `createdAt`. An unknown, inactive, or expired token on `accept` or `preview` yields a single generic validation error that the Team_Join_Link is invalid (R17.4, R17.8); a User already a member of the bound Team is rejected with a validation error (R17.5). Acceptance is effective on the User's next request (R17.3); an unauthenticated accept is rejected with an authentication error (R17.7). Expiry is computed from `expires_at` at read time (R17.1). V1 has no Team remove, leave, role change, rename, or delete.
 
+### API Documentation (OpenAPI / Swagger UI)
+
+The REST contract is documented in `backend/openapi.yaml` (OpenAPI 3.0.3), hand-written from the endpoint tables and response schemas in this section and covering every route, including the Guest routes and `GET /api/health`. Authentication is described as two cookie security schemes (`access_token`, `refresh_token`). When the spec and the routes disagree, the routes and this design are authoritative and the YAML is corrected.
+
+`common/docs.py` defines `docs_bp`, which serves two read-only GET routes: `GET /api/docs` (Swagger UI loaded from the jsDelivr CDN, no Python dependency) and `GET /api/docs/openapi.yaml` (the raw spec file). `create_app` registers `docs_bp` only when `API_DOCS_ENABLED` is true; `config.py` sets it to true only when `APP_ENV=development`. In any other environment the routes do not exist and return the standard `404` envelope. Both routes are public (no authentication) because they are development tooling; they are a documented exception to the public-endpoint list at the top of this section and are never reachable in production. Because the browser stays same-origin, Swagger UI "Try it out" works through the Next.js `/api/*` rewrite and sends the login cookie automatically.
+
 ### Access_Control_Service: Guest Access (R11)
 
 Anonymous, read-only Guest endpoints live under `/api/guest/<token>/...`, accept **GET only**, and need no authentication:
@@ -438,7 +452,7 @@ One function resolves the token to its Board and raises `AuthorizationError` for
 
 These are the camelCase JSON shapes returned by the endpoints above. Field names are the camelCase form of the snake_case Data Model columns (conversion happens only in `common/serialization.py`); `currentUserRole` and `currentUserTeamRole` are the only fields not stored on an entity. UUIDs are strings; timestamps are ISO 8601 UTC strings; `type | null` marks a nullable field; enum values are listed with their exact stored spelling (values are never camelCased). No response includes `passwordHash`, and no token appears in a body except on the two link-creation shapes that explicitly return `token` (`TeamJoinLink`, `InvitationLink`). Guest responses expose Users only as `{ id, displayName }` and never include emails, `version`, or Activity.
 
-**User** (identity; returned by `GET /api/auth/me` and inside `login`) — the only shape that exposes `email`:
+**User** (identity; returned by `GET /api/auth/me`, `PATCH /api/auth/me`, `POST /api/auth/me/password`, and inside `login`) — the only shape that exposes `email`:
 ```
 {
   id: string,
@@ -987,6 +1001,12 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 **Validates: Requirements 5.5**
 
+### Property 40: Profile updates validate the display name and password changes require the current password
+
+*For any* authenticated User and *any* display name, a Profile update succeeds only when the name has 1–50 characters after trimming, in which case the trimmed name is stored and the email and password hash are unchanged; any other display name, and any request carrying a field other than `displayName` (including `email`), is rejected with a validation error and the Profile is unchanged. *For any* password change request, it succeeds only when the current password is correct, the account is not locked, and the new password has at least 8 characters and differs from the current one; on success the new password verifies, the old one no longer does, every earlier Refresh_Token is revoked, and a new token pair is issued. Otherwise the stored hash and tokens are unchanged, a wrong current password (or a locked account) yields the same error, and only a wrong current password counts toward the three-failure lockout.
+
+**Validates: Requirements 18.2, 18.3, 18.4, 18.6, 18.7, 18.8, 18.9**
+
 ## Error Handling
 
 ### Error Taxonomy and HTTP Mapping
@@ -997,7 +1017,7 @@ All domain services raise typed errors that a central Flask error handler maps t
 | --- | --- | --- | --- |
 | `AuthenticationError` | 401 | Missing/expired/invalid access-token cookie; invalid login; login against a locked account; revoked/expired/invalid refresh token on refresh; unauthenticated Team_Join_Link accept | R12.6, R15.3, R15.5, R15.9, R15.10, R15.12, R17.7 |
 | `AuthorizationError` | 403 | Role/invitation forbids operation; inactive/unknown/archived-board Guest token; any non-GET on a Guest route | R1.7, R5.5, R6.9, R10.7, R11.4, R11.5, R11.6, R11.7, R11.8, R12.2, R12.3, R12.4, R12.5, R16.5, R17.6, R8.14 |
-| `ValidationError` | 400 | Invalid input (name/title/body/keyword/role/cursor), out-of-range index, invalid assignee, invalid parent, not-a-Team-member target, already-member, last-admin, not-archived restore, duplicate email, invalid Team/join-link | R1.8, R1.9, R2.6, R2.7, R3.7, R3.8, R4.4, R4.5, R5.7, R5.8, R6.10, R7.5, R10.4, R10.5, R10.6, R10.8, R15.14, R15.15, R15.16, R16.2, R17.4, R17.5 |
+| `ValidationError` | 400 | Invalid input (name/title/body/keyword/role/cursor), out-of-range index, invalid assignee, invalid parent, not-a-Team-member target, already-member, last-admin, not-archived restore, duplicate email, invalid Team/join-link, invalid display name, non-editable Profile field, wrong current password, invalid new password | R18.3, R18.4, R18.7, R18.8, R18.9, R1.8, R1.9, R2.6, R2.7, R3.7, R3.8, R4.4, R4.5, R5.7, R5.8, R6.10, R7.5, R10.4, R10.5, R10.6, R10.8, R15.14, R15.15, R15.16, R16.2, R17.4, R17.5 |
 | `NotFoundError` | 404 | Referenced resource does not exist (incl. a Card outside a Guest token's Board) | R3.9, R11.3 |
 | `ConflictError` | 409 | Version mismatch or missing version on a Card or Comment edit (only) | R13.2, R13.5 |
 
@@ -1025,6 +1045,7 @@ Every mutating request runs in a single transaction. On any raised domain error 
 
 - Passwords hashed with argon2 (`argon2-cffi`); never logged or returned (R15.1).
 - Generic login error prevents account enumeration (R15.3).
+- Password change re-verifies the current password, shares the lockout counter with login so a hijacked session cannot guess the password without limit, revokes every refresh token, and never reveals the lock state (R18.6, R18.7, R18.8). The email cannot be changed because V1 has no email verification (R18.4).
 - Account lockout mitigates brute-force and credential-stuffing attacks: 3 consecutive failed logins lock the account for 15 minutes, during which all login attempts fail; the generic authentication error avoids disclosing the locked state (R15.4, R15.5).
 - JWT Access_Tokens are stateless, short-lived, carry identity only (no role claims, R15.13), and are verified by signature and expiry on every request (R15.9, R15.10).
 - Tokens live only in `HttpOnly` cookies (`SameSite=Lax`, no `Domain`, `Secure` via `COOKIE_SECURE`), never in response bodies, URLs, or browser storage; the refresh cookie is scoped to `/api/auth/refresh` and `/api/auth/logout`. State-changing requests never use GET (CSRF protection relies on `SameSite=Lax`). No CORS: the browser calls same-origin `/api/*`, proxied by Next.js.
@@ -1042,7 +1063,7 @@ The feature is a stateful web application with substantial pure logic (ordering/
 - **Example-based unit tests** for concrete scenarios and supporting criteria (default-column creation R1.2, archive/restore flows R1.4/1.5, mark-as-read R6.5, login setting both auth cookies and returning identity and logout revoking the refresh token and clearing cookies R15.2/15.8, token refresh issuing a new identity-only access token R15.11, version present on retrieval R13.1/13.4, Team creation making the creator `team_admin` R16.1, Team_Join_Link accept R17.3).
 - **Edge-case unit tests** for specific error conditions (restore non-archived R1.9, not-found card R3.9, duplicate email R15.15, out-of-range activity page R8.15, unknown invitation token R11.6, mark others' notification R6.9, expired Team_Join_Link R17.4, non-member Team members request R16.5, non-GET on a Guest route R11.4).
 - **Integration tests** for non-functional and infrastructure concerns: performance/p95 under load (R14.1), availability health-check (R14.2), responsive layout at/below 1024px (R14.3/14.4), and real concurrent-writer no-lost-update behavior (R14.5), plus account-lockout flows — locking after 3 consecutive failed logins and unlocking after the 15-minute window (R15.4–R15.7); the time-based unlock (R15.7) is validated with a controllable/injected clock — plus end-to-end API wiring through the auth and RBAC gates.
-- **Frontend (Playwright E2E)** is the primary frontend test type, covering the main user flows: auth, Team and join-link flows, Board/Column/Card CRUD, drag-and-drop, comments and mentions, search, and anonymous Guest access via an Invitation_Link. Tests live in `frontend/e2e/<flow>.spec.ts`, are mutually independent, and use accessible locators.
+- **Frontend (Playwright E2E)** is the primary frontend test type, covering the main user flows: auth, Profile (display name and password change), Team and join-link flows, Board/Column/Card CRUD, drag-and-drop, comments and mentions, search, and anonymous Guest access via an Invitation_Link. Tests live in `frontend/e2e/<flow>.spec.ts`, are mutually independent, and use accessible locators.
 
 ### Property-Based Testing Setup
 
@@ -1052,7 +1073,7 @@ The feature is a stateful web application with substantial pure logic (ordering/
 - **Traceability tag:** each property test includes a comment tagging it to the design property, in the format:
   `# Feature: task-management-app, Property {number}: {property_text}`
 
-Each of the 39 correctness properties is implemented by a single backend property-based test. Generators model the relevant domain objects (boards, columns with cards, comment trees, mention multisets, notification sets with timestamps, membership/role sets, version sequences) and include edge cases (empty collections, whitespace-only strings, non-ASCII, boundary lengths, duplicate mentions, equal timestamps for tie-break coverage). Properties 31 to 34, 37, and 38 (Teams, Board creation, Board invitations, Team_Join_Link lifecycle, Board listing, and visibility) run against the transactional test database with small generators.
+Each of the 40 correctness properties is implemented by a single backend property-based test. Generators model the relevant domain objects (boards, columns with cards, comment trees, mention multisets, notification sets with timestamps, membership/role sets, version sequences) and include edge cases (empty collections, whitespace-only strings, non-ASCII, boundary lengths, duplicate mentions, equal timestamps for tie-break coverage). Properties 31 to 34, 37, 38, and 40 (Teams, Board creation, Board invitations, Team_Join_Link lifecycle, Board listing, visibility, and Profile) run against the transactional test database with small generators.
 
 ### Example and Integration Coverage Notes
 

@@ -35,6 +35,11 @@ def test_login_failures_are_identical_for_every_cause(
     client: Any, local: str, password: str, wrong: str, unknown_password: str
 ) -> None:
     assume(wrong != password)
+    # Skip random passwords that coincidentally appear in the fixed generic message
+    # (e.g. "authenti"), which would be a false positive for the leak check.
+    _, baseline_body, _ = _login(client, "baseline-unknown@example.com", "Baseline-pw-1")
+    baseline = str(baseline_body).lower()
+    assume(password.lower() not in baseline and wrong.lower() not in baseline)
     suffix = uuid.uuid4().hex[:8]
     email = f"{local}-{suffix}@example.com"
     unknown_email = f"nobody-{local}-{suffix}@example.com"

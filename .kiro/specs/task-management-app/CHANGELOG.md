@@ -2,6 +2,53 @@
 
 All notable changes to the task-management-app spec are documented here. Versions are ordered newest-first. The version is bumped each time a spec document (requirements.md, design.md, or tasks.md) is changed.
 
+## v20 - 2026-11-20 - User profile (display name and password)
+### Changes
+- **Specification changes:** requirements.md gains Requirement 18 (User Profile, criteria 18.1 to 18.11): view the Profile, edit the display name (1 to 50 characters after trimming), reject any other Profile field including the email, show the new name in later responses, change the password with the current password (new password at least 8 characters and different, all refresh tokens revoked, new cookies issued, failure count reset), count a wrong current password toward the existing lockout, give a locked account the same error as a wrong password, and provide a `/profile` page. Added the "Profile" glossary term and updated the Introduction (Profile page added; changing the email address added to the V1 exclusions). Requirements 1 to 17 are unchanged and not renumbered.
+- **Design changes:** design.md adds `PATCH /api/auth/me` and `POST /api/auth/me/password` to Authentication_Service (now R15, R18), a Profile paragraph (order of checks, lockout sharing, token revocation and re-issue, `400` not `401` for a wrong current password), the `/profile` page in Frontend Structure, the User entity note (no new columns), the error-table and security entries, and Property 40 (total 40 properties; Property 40 runs against the test database).
+- **Implementation changes:** none yet. Tasks 4.10, 4.11, 4.12, 15.5, 19.10, and 20.5 are added as not started.
+- **Bug fixes:** none.
+- **Breaking changes:** none. Existing endpoints and responses are unchanged.
+### Reason
+The spec had no way for a User to edit their own account details. Decisions confirmed with the user: scope is display name and password change; the email stays read-only because V1 has no email verification.
+### Impact
+- Affected requirements: Requirement 18 added; Introduction and Glossary updated.
+- Affected design components: Authentication_Service, Frontend Structure, Data Models (User note), Error Handling, Security Considerations, Correctness Properties (Property 40), Testing Strategy.
+- Affected implementation tasks: added 4.10 to 4.12 (auth module, unit tests, Property 40 test), 15.5 (profile page), 19.10 (Profile E2E), 20.5 (OpenAPI update, 50 operations); parent tasks 4 and 15 were reopened because they now contain unfinished sub-tasks; waves in the dependency graph renumbered (113 waves); the Requirement-to-Task and Property-to-Task mappings gain R18.1 to R18.11 and P40.
+- Steering files were not edited. `product.md` lists no profile feature and its Non-Goals do not mention changing the email address.
+
+## v19 - 2026-11-18 - Frontend error handling, toasts, and error boundaries
+### Changes
+- **Specification changes:** requirements.md Requirement 14 gains criteria 14.6 (failed actions show a toast), 14.7 (4xx shows the server message; 5xx, network, and unexpected failures show a fixed generic message), 14.8 (fallback page for unexpected rendering errors), and 14.9 (no stack traces, digests, error codes, debug output, or console error output in production).
+- **Design changes:** added an "Error handling and toasts" bullet to Frontend Structure in design.md (error helper, toast provider, error boundaries, which errors become toasts).
+- **Implementation changes:** added `src/lib/errorHandler.ts`, `src/hooks/useToast.ts`, `BaseToastProvider`, `BaseErrorFallback`, `app/error.tsx`, `app/(app)/error.tsx`, `app/global-error.tsx`, and `app/not-found.tsx`; mounted the provider in the root layout; changed `BaseToast` to be positioned by its container. Hooks and forms now report failures through `useToast`; removed the `actionError` state from `useBoard`, `useBoardSettings`, and `useTeamDetail`, the `onMoveError` parameter of `useDragAndDrop`, the `error` field of `useCardDetail`, and the `actionError` props of `BoardMemberPanel` and `JoinLinkPanel`.
+- **Bug fixes:** `CreateBoardForm` and `CreateTeamForm` no longer show a raw `Error.message` (for example "Failed to fetch") to the user.
+- **Breaking changes:** none to the API. Failed actions that previously showed inline text (Board settings members, Team join links, Card detail, Comments server errors, Board actions) now show a toast.
+### Reason
+Request to add error boundaries and a central error handler on the frontend, show errors through toasts, and make sure no debug output is visible in production. Decisions confirmed with the user: action and background errors become toasts while page-load failures keep their error view and also toast and field validation stays inline; 4xx errors show the server message and everything else shows a generic message; dev details go to the browser console only.
+### Impact
+- Affected requirements: 14.6, 14.7, 14.8, 14.9 added; 15.3 unchanged (login keeps its generic inline message for 4xx responses).
+- Affected design components: Frontend Structure.
+- Affected implementation tasks: 15.4 added (completed) and wave 82 in the dependency graph (later waves renumbered by one); the Requirement-to-Task Mapping gains R14.6 to R14.9 and R15.3 now lists 15.4.
+- Bug fix (implementation only, no spec change): `next build` failed while prerendering `/invite/[token]` because `params` was read outside `<Suspense>` with `cacheComponents` enabled. The page is now a server component that awaits `params` inside a `<Suspense>` boundary with a loading fallback, like `/join/[token]`. `GuestBoardView` and its behavior are unchanged. `next build` now succeeds, which unblocks the build step of task 18.1.
+## v18 - 2026-11-18 - API documentation (OpenAPI and Swagger UI)
+
+### Changes
+- **Specification changes:** none to requirements.md (the documentation is development tooling, not product behavior, so no requirement R1-R17 was added or changed).
+- **Design changes:** added an "API Documentation (OpenAPI / Swagger UI)" subsection to the API Design section of design.md, and a note in the public-endpoint list that two development-only documentation routes exist.
+- **Implementation changes:** added `backend/openapi.yaml` (48 operations, every route in the app), `backend/flask_app/common/docs.py` (`GET /api/docs`, `GET /api/docs/openapi.yaml`), the `API_DOCS_ENABLED` config key (true only when `APP_ENV=development`), and the conditional `docs_bp` registration in `app.py`. Swagger UI is loaded from a CDN, so no dependency was added.
+- **Tasks:** added task 20.4 (completed) and wave 104 in the dependency graph.
+- **Bug fixes / breaking changes:** none.
+
+### Reason
+Request for API docs using Swagger. Decisions confirmed with the user: serve Swagger UI from the app, enable it only in development, document every endpoint including Guest routes, and record the change as a new version.
+
+### Impact
+- Affected requirements: none.
+- Affected design components: API Design (new API Documentation subsection, public-endpoint list note).
+- Affected implementation tasks: 20.4 added; no existing task changed.
+- Note: the two docs routes are public, which `structure.md` and `backend.md` rule 2 treat as an exception requiring approval. The user approved this on 2026-11-18; the steering files were not edited.
+
 ## v17 - 2026-11-13 - tasks.md created
 
 ### Changes

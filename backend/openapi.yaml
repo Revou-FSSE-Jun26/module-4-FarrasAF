@@ -1,0 +1,1367 @@
+openapi: 3.0.3
+info:
+  title: Task Management API
+  version: "1.0.0"
+  description: |
+    REST JSON API for the Trello-inspired task management app.
+
+    - Request and response keys are camelCase. Enum values are sent exactly as stored.
+    - Success responses are unwrapped (no `data` envelope). Create returns `201`, delete returns `204`.
+    - Errors always use `{ "error": { "code", "message", "field?" } }`.
+    - Authentication uses `HttpOnly` cookies set by `POST /api/auth/login`. Tokens never appear in bodies.
+      Run login from this page first; "Try it out" then sends the cookie automatically.
+    - The access token carries identity only. Board and Team roles are read from stored membership on every request.
+    - Guest routes under `/api/guest/{token}/...` need no account, are GET only, and answer any other method with `403`.
+    - Card and Comment `PATCH` require a `version` in the body. A missing or stale `version` returns `409`.
+
+    Source of truth for behavior is `.kiro/specs/task-management-app/design.md`.
+servers:
+  - url: /
+    description: Same origin (the Next.js frontend proxies /api/* to Flask)
+tags:
+  - name: Health
+  - name: Auth
+  - name: Teams
+  - name: Boards
+  - name: Columns
+  - name: Cards
+  - name: Comments
+  - name: Notifications
+  - name: Search
+  - name: Activity
+  - name: Analytics
+  - name: Members
+  - name: Invitations
+  - name: Guest
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Liveness check (never touches the database)
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+
+  # ---------------------------------------------------------------- Auth
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Create an account (does not log in)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in and set access and refresh cookies
+      description: |
+        Failure is always a generic `401`; it never reveals whether the email, the password, or an account lockout
+        (3 consecutive failures lock the account for 15 minutes) was the cause.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Logged in. Sets `access_token` (path `/`) and `refresh_token` (path `/api/auth/refresh` and `/api/auth/logout`) cookies.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Exchange the refresh cookie for a new access cookie
+      security:
+        - refreshCookie: []
+      responses:
+        "200":
+          description: New access cookie set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the refresh token and clear both cookies
+      security:
+        - refreshCookie: []
+      responses:
+        "204":
+          description: Logged out
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user identity
+      responses:
+        "200":
+          description: Identity only (roles are on Board and Team responses)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ---------------------------------------------------------------- Teams
+  /api/teams:
+    post:
+      tags: [Teams]
+      summary: Create a Team (creator becomes team_admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTeamRequest" }
+      responses:
+        "201":
+          description: Team created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    get:
+      tags: [Teams]
+      summary: List the caller's Teams
+      responses:
+        "200":
+          description: Teams the caller belongs to
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Team" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/teams/{teamId}/members:
+    get:
+      tags: [Teams]
+      summary: List Team members (Team members only)
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "200":
+          description: Team members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TeamMember" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/teams/{teamId}/join-links:
+    post:
+      tags: [Teams]
+      summary: Generate a Team Join Link, valid 7 days (team_admin only)
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "201":
+          description: Link created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamJoinLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    get:
+      tags: [Teams]
+      summary: List Team Join Links (team_admin only)
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "200":
+          description: Join links
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TeamJoinLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/team-join-links/{token}/revoke:
+    post:
+      tags: [Teams]
+      summary: Revoke a Team Join Link (team_admin only)
+      parameters:
+        - $ref: "#/components/parameters/Token"
+      responses:
+        "200":
+          description: Link set inactive
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamJoinLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/team-join-links/{token}:
+    get:
+      tags: [Teams]
+      summary: Preview the Team a join link belongs to
+      description: An unknown, inactive, or expired token returns a single generic validation error.
+      parameters:
+        - $ref: "#/components/parameters/Token"
+      responses:
+        "200":
+          description: Team name
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [teamName]
+                properties:
+                  teamName: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/team-join-links/{token}/accept:
+    post:
+      tags: [Teams]
+      summary: Join the Team as team_regular
+      description: Rejected with a validation error if the link is invalid or the caller is already a member.
+      parameters:
+        - $ref: "#/components/parameters/Token"
+      responses:
+        "200":
+          description: Joined
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [teamId]
+                properties:
+                  teamId: { type: string, format: uuid }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ---------------------------------------------------------------- Boards
+  /api/boards:
+    post:
+      tags: [Boards]
+      summary: Create a Board with To Do, Doing and Done Columns (creator becomes Admin)
+      description: The caller must be a member of the target Team.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBoardRequest" }
+      responses:
+        "201":
+          description: Board created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Board" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    get:
+      tags: [Boards]
+      summary: List the caller's Boards
+      description: Active Boards by default. With `archived`, only archived Boards where the caller is Admin.
+      parameters:
+        - name: archived
+          in: query
+          required: false
+          allowEmptyValue: true
+          description: Bare `?archived` or `archived=true` selects archived Boards; `archived=false` selects active ones.
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Boards
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Board" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/boards/{boardId}:
+    parameters:
+      - $ref: "#/components/parameters/BoardId"
+    get:
+      tags: [Boards]
+      summary: Get a Board with its Columns and Cards (Member or Admin)
+      responses:
+        "200":
+          description: Board detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoardDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Boards]
+      summary: Partially update name, description, or visibility (Admin)
+      description: Any invalid field rejects the whole request. `visibility` is stored but has no effect in V1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBoardRequest" }
+      responses:
+        "200":
+          description: Updated Board
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Board" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Boards]
+      summary: Permanently delete a Board and everything in it (Admin)
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/boards/{boardId}/archive:
+    post:
+      tags: [Boards]
+      summary: Archive a Board (Admin)
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      responses:
+        "200":
+          description: Archived Board
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Board" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/boards/{boardId}/restore:
+    post:
+      tags: [Boards]
+      summary: Restore an archived Board (Admin)
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      responses:
+        "200":
+          description: Restored Board
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Board" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- Columns
+  /api/boards/{boardId}/columns:
+    post:
+      tags: [Columns]
+      summary: Create a Column at the end of the Board (Admin)
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ColumnNameRequest" }
+      responses:
+        "201":
+          description: Column created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Column" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/columns/{columnId}:
+    parameters:
+      - $ref: "#/components/parameters/ColumnId"
+    patch:
+      tags: [Columns]
+      summary: Rename a Column (Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ColumnNameRequest" }
+      responses:
+        "200":
+          description: Renamed Column
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Column" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Columns]
+      summary: Delete an empty Column (Admin)
+      description: A Column that still has Cards is rejected with a validation error.
+      responses:
+        "204":
+          description: Deleted
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/columns/{columnId}/reorder:
+    post:
+      tags: [Columns]
+      summary: Move a Column to a target index (Admin)
+      parameters:
+        - $ref: "#/components/parameters/ColumnId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetIndex]
+              properties:
+                targetIndex: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Reordered Column
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Column" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- Cards
+  /api/columns/{columnId}/cards:
+    post:
+      tags: [Cards]
+      summary: Create a Card at the end of a Column (Member or Admin)
+      parameters:
+        - $ref: "#/components/parameters/ColumnId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCardRequest" }
+      responses:
+        "201":
+          description: Card created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Card" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/cards/{cardId}:
+    parameters:
+      - $ref: "#/components/parameters/CardId"
+    get:
+      tags: [Cards]
+      summary: Get a Card, including its current `version` (Member or Admin)
+      responses:
+        "200":
+          description: Card
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Card" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Cards]
+      summary: Edit a Card atomically (Member or Admin)
+      description: |
+        `version` is required. A missing or stale value returns `409`. Any invalid field rejects the whole request.
+        The assignee must be a current Member of the Board.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateCardRequest" }
+      responses:
+        "200":
+          description: Updated Card with an incremented `version`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Card" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Cards]
+      summary: Delete a Card (Member or Admin, no `version` needed)
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/cards/{cardId}/move:
+    post:
+      tags: [Cards]
+      summary: Move a Card to a Column and index (Member or Admin)
+      description: |
+        The target Column must be in the same Board. `targetIndex` ranges from 0 to the number of Cards in the target
+        Column after the moved Card is removed. No `version` is needed and `version` does not change.
+      parameters:
+        - $ref: "#/components/parameters/CardId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetColumnId, targetIndex]
+              properties:
+                targetColumnId: { type: string, format: uuid }
+                targetIndex: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Moved Card
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Card" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- Comments
+  /api/cards/{cardId}/comments:
+    parameters:
+      - $ref: "#/components/parameters/CardId"
+    get:
+      tags: [Comments]
+      summary: List a Card's Comments, flat and oldest first (Member or Admin)
+      responses:
+        "200":
+          description: Comments; build the thread tree from `parentCommentId`
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Comment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Comments]
+      summary: Add a Comment or a reply (Member or Admin)
+      description: |
+        Mentions use the token `@[<user-uuid>]` in `body`. One Notification is created per distinct mentioned Board
+        Member. Invalid or non-member mentions never reject the Comment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCommentRequest" }
+      responses:
+        "201":
+          description: Comment created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Comment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/comments/{commentId}:
+    parameters:
+      - $ref: "#/components/parameters/CommentId"
+    patch:
+      tags: [Comments]
+      summary: Edit your own Comment
+      description: "`version` is required. A missing or stale value returns `409`. Editing another user's Comment returns `403`."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateCommentRequest" }
+      responses:
+        "200":
+          description: Updated Comment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Comment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Comments]
+      summary: Delete your own Comment and its replies
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- Notifications
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: List the caller's Notifications, newest first, 50 per page
+      description: Poll the newest page without a cursor. Use `cursor` only to load older pages.
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque value from a previous `nextCursor`. A malformed cursor returns a validation error.
+          schema: { type: string }
+        - name: unreadOnly
+          in: query
+          required: false
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: A page of Notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Notification" }
+                  nextCursor: { type: string, nullable: true }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/notifications/{notificationId}/read:
+    post:
+      tags: [Notifications]
+      summary: Mark one of your Notifications as read
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Updated Notification
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- Search
+  /api/search/cards:
+    get:
+      tags: [Search]
+      summary: Search Card titles on Boards you belong to
+      description: Case-insensitive literal substring match. Ordered by `updatedAt` descending, capped at 100.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: 1 to 100 characters after trimming.
+          schema: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        "200":
+          description: Matching Cards
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 100
+                    items: { $ref: "#/components/schemas/SearchResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ---------------------------------------------------------------- Activity and Analytics
+  /api/boards/{boardId}/activity:
+    get:
+      tags: [Activity]
+      summary: Board Activity Log, newest first, 100 per page (Member or Admin)
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index. A page beyond the last returns an empty page.
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: A page of Activity entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page, pageSize]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ActivityEntry" }
+                  page: { type: integer }
+                  pageSize: { type: integer, example: 100 }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/boards/{boardId}/analytics:
+    get:
+      tags: [Analytics]
+      summary: Board analytics (Member or Admin)
+      description: "`completionRate` is the share of Cards in Columns named exactly `Done`, from 0 to 1."
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      responses:
+        "200":
+          description: Analytics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Analytics" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- Members
+  /api/boards/{boardId}/members:
+    parameters:
+      - $ref: "#/components/parameters/BoardId"
+    get:
+      tags: [Members]
+      summary: List Board members (Member or Admin)
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/BoardMember" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Members]
+      summary: Add a Team member to the Board (Admin)
+      description: The user must belong to the Board's Team and must not already be a Board member.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, role]
+              properties:
+                userId: { type: string, format: uuid }
+                role: { $ref: "#/components/schemas/BoardRole" }
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoardMember" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/boards/{boardId}/members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/BoardId"
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Members]
+      summary: Change a member's role (Admin)
+      description: Rejected if it would leave the Board with no Admin. Applies on the member's next request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { $ref: "#/components/schemas/BoardRole" }
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoardMember" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Members]
+      summary: Remove a member (Admin)
+      description: Rejected if it would leave the Board with no Admin.
+      responses:
+        "204":
+          description: Removed
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- Invitations
+  /api/boards/{boardId}/invitations:
+    parameters:
+      - $ref: "#/components/parameters/BoardId"
+    get:
+      tags: [Invitations]
+      summary: List Invitation Links (Admin)
+      responses:
+        "200":
+          description: Invitation Links
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/InvitationLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Invitations]
+      summary: Generate an Invitation Link for anonymous read-only access (Admin)
+      responses:
+        "201":
+          description: Link created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvitationLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/invitations/{token}/revoke:
+    post:
+      tags: [Invitations]
+      summary: Revoke an Invitation Link (Admin of the link's Board)
+      parameters:
+        - $ref: "#/components/parameters/Token"
+      responses:
+        "200":
+          description: Link set inactive
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvitationLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------- Guest
+  /api/guest/{token}/board:
+    get:
+      tags: [Guest]
+      summary: Read-only Board view through an Invitation Link
+      description: |
+        No account needed. An unknown, inactive, or revoked token, or a token for an archived Board, returns `403`.
+        Responses never include emails, `version`, or Activity.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Token"
+      responses:
+        "200":
+          description: Board with Columns and Cards
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuestBoard" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/guest/{token}/cards/{cardId}/comments:
+    get:
+      tags: [Guest]
+      summary: Read-only Comments of a Card on the token's Board
+      description: Flat list, oldest first. A Card on another Board returns `404`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Token"
+        - $ref: "#/components/parameters/CardId"
+      responses:
+        "200":
+          description: Comments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/GuestComment" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    accessCookie:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: HttpOnly access token (15 minutes), set by `POST /api/auth/login`.
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: HttpOnly refresh token (7 days), scoped to `/api/auth/refresh` and `/api/auth/logout`.
+
+  parameters:
+    BoardId:
+      name: boardId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ColumnId:
+      name: columnId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CardId:
+      name: cardId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CommentId:
+      name: commentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TeamId:
+      name: teamId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Token:
+      name: token
+      in: path
+      required: true
+      description: High-entropy link token.
+      schema: { type: string }
+
+  responses:
+    ValidationError:
+      description: Invalid input (`validation_error`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing, expired, or invalid credentials (`authentication_error`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Not allowed for this role (`authorization_error`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found, or malformed id (`not_found`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Missing or stale `version` (`conflict`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [validation_error, authentication_error, authorization_error, not_found, conflict, internal_error]
+            message: { type: string }
+            field: { type: string, description: Present only for field-scoped validation errors }
+
+    BoardRole:
+      type: string
+      enum: [admin, member]
+    TeamRole:
+      type: string
+      enum: [team_admin, team_regular]
+    LinkStatus:
+      type: string
+      enum: [active, inactive]
+
+    User:
+      type: object
+      required: [id, email, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+    RegisterRequest:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email: { type: string, format: email, maxLength: 255 }
+        password: { type: string, minLength: 8, format: password }
+        displayName: { type: string, minLength: 1, maxLength: 50, description: Length counted after trimming }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string, format: password }
+
+    CreateTeamRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+    Team:
+      type: object
+      required: [id, name, currentUserTeamRole, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        currentUserTeamRole: { $ref: "#/components/schemas/TeamRole" }
+        createdAt: { type: string, format: date-time }
+    TeamMember:
+      type: object
+      required: [userId, displayName, teamRole]
+      properties:
+        userId: { type: string, format: uuid }
+        displayName: { type: string }
+        teamRole: { $ref: "#/components/schemas/TeamRole" }
+    TeamJoinLink:
+      type: object
+      required: [id, teamId, token, status, expiresAt, createdAt, isExpired]
+      properties:
+        id: { type: string, format: uuid }
+        teamId: { type: string, format: uuid }
+        token: { type: string }
+        status: { $ref: "#/components/schemas/LinkStatus" }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        isExpired: { type: boolean, description: "Derived at read time from `expiresAt`, never stored" }
+
+    CreateBoardRequest:
+      type: object
+      required: [teamId, name]
+      properties:
+        teamId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+    UpdateBoardRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 2000 }
+        visibility: { type: string, enum: [private, team] }
+    Board:
+      type: object
+      required: [id, teamId, name, description, visibility, status, currentUserRole, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        teamId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        visibility: { type: string, enum: [private, team] }
+        status: { type: string, enum: [active, archived] }
+        currentUserRole: { $ref: "#/components/schemas/BoardRole" }
+        createdAt: { type: string, format: date-time }
+    BoardDetail:
+      allOf:
+        - $ref: "#/components/schemas/Board"
+        - type: object
+          required: [columns]
+          properties:
+            columns:
+              type: array
+              description: Ordered Columns, each with its ordered Cards
+              items:
+                allOf:
+                  - $ref: "#/components/schemas/Column"
+                  - type: object
+                    required: [cards]
+                    properties:
+                      cards:
+                        type: array
+                        items: { $ref: "#/components/schemas/Card" }
+    BoardMember:
+      type: object
+      required: [userId, displayName, role]
+      properties:
+        userId: { type: string, format: uuid }
+        displayName: { type: string }
+        role: { $ref: "#/components/schemas/BoardRole" }
+
+    ColumnNameRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+    Column:
+      type: object
+      required: [id, boardId, name, orderIndex, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        boardId: { type: string, format: uuid }
+        name: { type: string }
+        orderIndex: { type: integer, minimum: 0, description: Contiguous from 0 }
+        createdAt: { type: string, format: date-time }
+
+    CreateCardRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 255, description: Length counted after trimming }
+        description: { type: string, maxLength: 5000 }
+        assigneeId: { type: string, format: uuid, nullable: true }
+        dueDate: { type: string, format: date, nullable: true }
+    UpdateCardRequest:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, description: "Current Card version. Declared required here for clarity; the server answers 409 when it is missing." }
+        title: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: string, maxLength: 5000 }
+        assigneeId: { type: string, format: uuid, nullable: true }
+        dueDate: { type: string, format: date, nullable: true }
+    Card:
+      type: object
+      required: [id, columnId, boardId, title, description, assigneeId, dueDate, createdById, orderIndex, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        columnId: { type: string, format: uuid }
+        boardId: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        assigneeId: { type: string, format: uuid, nullable: true }
+        dueDate: { type: string, format: date, nullable: true }
+        createdById: { type: string, format: uuid }
+        orderIndex: { type: integer, minimum: 0 }
+        version: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SearchResult:
+      type: object
+      required: [id, title, description, assigneeId, dueDate, orderIndex, createdAt, updatedAt, board, column]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        assigneeId: { type: string, format: uuid, nullable: true }
+        dueDate: { type: string, format: date, nullable: true }
+        orderIndex: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        board:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        column:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+
+    CreateCommentRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 5000, description: Must contain a non-whitespace character }
+        parentCommentId: { type: string, format: uuid, nullable: true, description: Must be a Comment on the same Card }
+    UpdateCommentRequest:
+      type: object
+      required: [body, version]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 5000 }
+        version: { type: integer, description: "Declared required here for clarity; the server answers 409 when it is missing." }
+    Comment:
+      type: object
+      required: [id, cardId, authorId, parentCommentId, body, version, createdAt, editedAt]
+      properties:
+        id: { type: string, format: uuid }
+        cardId: { type: string, format: uuid }
+        authorId: { type: string, format: uuid }
+        parentCommentId: { type: string, format: uuid, nullable: true }
+        body: { type: string }
+        version: { type: integer }
+        createdAt: { type: string, format: date-time }
+        editedAt: { type: string, format: date-time, nullable: true }
+
+    Notification:
+      type: object
+      required: [id, recipientId, commentId, boardId, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        recipientId: { type: string, format: uuid }
+        commentId: { type: string, format: uuid }
+        boardId: { type: string, format: uuid }
+        status: { type: string, enum: [unread, read] }
+        createdAt: { type: string, format: date-time }
+
+    ActivityEntry:
+      type: object
+      required: [id, boardId, actorId, eventType, resourceId, secondaryResourceId, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        boardId: { type: string, format: uuid }
+        actorId: { type: string, format: uuid }
+        eventType:
+          type: string
+          enum:
+            - card_created
+            - card_updated
+            - card_moved
+            - card_deleted
+            - comment_created
+            - comment_edited
+            - comment_deleted
+            - column_created
+            - column_deleted
+            - member_joined
+            - member_removed
+        resourceId: { type: string, format: uuid }
+        secondaryResourceId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    Analytics:
+      type: object
+      required: [totalCards, perColumn, completionRate, activityByDay]
+      properties:
+        totalCards: { type: integer }
+        perColumn:
+          type: array
+          items:
+            type: object
+            required: [columnId, count]
+            properties:
+              columnId: { type: string, format: uuid }
+              count: { type: integer }
+        completionRate: { type: number, minimum: 0, maximum: 1 }
+        activityByDay:
+          type: array
+          items:
+            type: object
+            required: [day, count]
+            properties:
+              day: { type: string, format: date, description: UTC calendar day }
+              count: { type: integer }
+
+    InvitationLink:
+      type: object
+      required: [id, boardId, token, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        boardId: { type: string, format: uuid }
+        token: { type: string }
+        status: { $ref: "#/components/schemas/LinkStatus" }
+        createdAt: { type: string, format: date-time }
+
+    GuestUser:
+      type: object
+      required: [id, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+    GuestBoard:
+      type: object
+      required: [id, name, description, currentUserRole, columns]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        currentUserRole: { type: string, enum: [guest] }
+        columns:
+          type: array
+          items:
+            type: object
+            required: [id, name, orderIndex, cards]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              orderIndex: { type: integer }
+              cards:
+                type: array
+                items:
+                  type: object
+                  required: [id, title, description, orderIndex, dueDate, assignee]
+                  properties:
+                    id: { type: string, format: uuid }
+                    title: { type: string }
+                    description: { type: string }
+                    orderIndex: { type: integer }
+                    dueDate: { type: string, format: date, nullable: true }
+                    assignee:
+                      nullable: true
+                      allOf:
+                        - $ref: "#/components/schemas/GuestUser"
+    GuestComment:
+      type: object
+      required: [id, parentCommentId, body, author, createdAt, editedAt]
+      properties:
+        id: { type: string, format: uuid }
+        parentCommentId: { type: string, format: uuid, nullable: true }
+        body: { type: string }
+        author: { $ref: "#/components/schemas/GuestUser" }
+        createdAt: { type: string, format: date-time }
+        editedAt: { type: string, format: date-time, nullable: true }
+
+security:
+  - accessCookie: []

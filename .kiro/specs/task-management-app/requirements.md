@@ -4,7 +4,7 @@
 
 This document specifies the requirements for a collaborative team task management web application inspired by Trello. Teams organize work using Boards that contain ordered Columns, and each Column contains ordered Cards representing tasks. Members create and manage Cards, assign ownership, move Cards between Columns via drag-and-drop, communicate through threaded Comments, receive Notifications when mentioned, search Cards, view an Activity Log, and view Board Analytics. Access to each Board is governed by role-based access control (RBAC) across three Board roles: Guest, Member, and Admin. Membership in a Team is governed by two Team_Roles: Team_Admin and Team_Regular.
 
-The application targets clear visibility into task progress, task ownership, and team activity within shared Team workspaces. Users register and authenticate with an account using an email address and password before accessing Boards, except that Guests read a single Board through an Invitation_Link without an account or authentication. Successful authentication issues a JWT-based access token that identifies the User on subsequent requests. Authenticated Users create Teams and bring others into a Team through Team_Join_Links. The initial version (V1) excludes file attachments, email notifications, password reset and email verification, third-party integrations, advanced analytics, burndown charts, real-time collaboration via WebSockets, removing Team_Members from a Team, leaving a Team, changing Team_Roles, and renaming or deleting a Team.
+The application targets clear visibility into task progress, task ownership, and team activity within shared Team workspaces. Users register and authenticate with an account using an email address and password before accessing Boards, except that Guests read a single Board through an Invitation_Link without an account or authentication. Successful authentication issues a JWT-based access token that identifies the User on subsequent requests. Authenticated Users create Teams and bring others into a Team through Team_Join_Links. Authenticated Users view and edit their own Profile (display name and password) on a profile page. The initial version (V1) excludes file attachments, email notifications, password reset and email verification, changing an account's email address, third-party integrations, advanced analytics, burndown charts, real-time collaboration via WebSockets, removing Team_Members from a Team, leaving a Team, changing Team_Roles, and renaming or deleting a Team.
 
 ## Glossary
 
@@ -22,6 +22,7 @@ The application targets clear visibility into task progress, task ownership, and
 - **Session**: An authenticated context for a User represented by an Access_Token and a Refresh_Token, established upon successful login and ended when the Refresh_Token is revoked (logout) or expires.
 - **Access_Token**: A short-lived JSON Web Token (JWT) issued upon successful authentication that carries the User's identity and authenticates API requests until it expires.
 - **Refresh_Token**: A longer-lived credential issued upon successful authentication that the Authentication_Service uses to mint new Access_Tokens, and that is revoked upon logout.
+- **Profile**: The User's own account details: the email address (read-only), the display name (editable), and the password (changeable). A Profile is visible and editable only by its own User.
 - **Account_Lockout**: A state in which an account is temporarily barred from authenticating, entered after a defined number of consecutive failed login attempts and cleared after a defined lockout period elapses or a successful login occurs.
 - **Team**: A group of Users created by a User and owning one or more Boards.
 - **Board**: A workspace that belongs to a Team and contains an ordered set of Columns.
@@ -263,6 +264,10 @@ The application targets clear visibility into task progress, task ownership, and
 3. WHERE a client viewport width is at least 1024 pixels, THE System SHALL render the Board layout such that all Columns, Cards, and primary navigation are reachable without horizontal page scrolling.
 4. WHERE a client viewport width is less than 1024 pixels, THE System SHALL render a layout in which all interactive controls remain visible and operable without horizontal page scrolling and without content overlapping.
 5. WHILE at least two Users act on distinct Boards or distinct Cards simultaneously, THE System SHALL apply each User's changes independently so that no change is lost and each affected resource reflects the applied changes on subsequent retrieval.
+6. IF a User action or a background request fails, THEN THE System SHALL show a transient toast message with a clear, actionable text. A toast message is a UI element and is not a Notification.
+7. IF a failed request returns a client error (HTTP status 400 to 499), THEN THE System SHALL show the error message supplied by the server; IF a failed request returns a server error (HTTP status 500 or above), has no response, or fails for any other unexpected reason, THEN THE System SHALL show a fixed generic message that does not include the underlying error text.
+8. IF an unexpected rendering error occurs in the UI, THEN THE System SHALL show a fallback page with a generic message and a retry action instead of a blank screen.
+9. WHILE THE System runs in production, THE System SHALL NOT show stack traces, error digests, internal error codes, or debug output in the UI, and SHALL NOT write error details to the browser console.
 
 ### Requirement 15: User Authentication
 
@@ -315,3 +320,21 @@ The application targets clear visibility into task progress, task ownership, and
 7. IF an unauthenticated User submits a Team_Join_Link acceptance request, THEN THE Access_Control_Service SHALL reject the request with an authentication error and SHALL leave Team membership unchanged.
 8. WHEN an authenticated User requests a preview of a Team_Join_Link, THE Team_Service SHALL return the name of the bound Team without changing Team membership if the Team_Join_Link is active and unexpired, and SHALL otherwise reject the request with a validation error indicating the Team_Join_Link is invalid.
 9. WHEN a Team_Admin requests the Team_Join_Links of a Team, THE Team_Service SHALL return each Team_Join_Link's token, status, expiration timestamp, and creation timestamp.
+
+### Requirement 18: User Profile
+
+**User Story:** As a User, I want to view and edit my own Profile, so that I can keep my display name current and change my password.
+
+#### Acceptance Criteria
+
+1. WHEN an authenticated User requests their Profile, THE Authentication_Service SHALL return the User's identifier, email address, and display name, and SHALL NOT return the password hash or any token.
+2. WHEN an authenticated User submits a Profile update with a display name of 1 to 50 characters after trimming leading and trailing whitespace, THE Authentication_Service SHALL persist the trimmed display name, leave the email address and password unchanged, and return the updated Profile.
+3. IF an authenticated User submits a Profile update whose display name is empty after trimming or exceeds 50 characters, THEN THE Authentication_Service SHALL reject the request with a validation error indicating the invalid display name and SHALL leave the Profile unchanged.
+4. IF an authenticated User submits a Profile update that contains any field other than the display name, including the email address, THEN THE Authentication_Service SHALL reject the request with a validation error indicating that the field cannot be changed and SHALL leave the Profile unchanged.
+5. WHEN a User's display name has been updated, THE System SHALL return the updated display name in every subsequent response that includes that User's display name.
+6. WHEN an authenticated User submits a password change with the correct current password and a new password of at least 8 characters that differs from the current password, THE Authentication_Service SHALL store the new password using the secure password hashing algorithm of Requirement 15.1, SHALL revoke every Refresh_Token of that User, SHALL issue a new Access_Token and a new Refresh_Token to the requesting client, and SHALL reset the account's consecutive failed login attempt count to zero.
+7. IF an authenticated User submits a password change with an incorrect current password, THEN THE Authentication_Service SHALL reject the request with a validation error indicating the current password is incorrect, SHALL leave the password and all tokens unchanged, and SHALL count the failure as a failed login attempt for Requirements 15.4 to 15.7.
+8. WHILE an account is locked under Requirement 15.5, THE Authentication_Service SHALL reject every password change for that account with the same validation error as Requirement 18.7, regardless of whether the submitted current password is correct, and the error SHALL NOT reveal whether the account is locked.
+9. IF an authenticated User submits a password change whose new password is shorter than 8 characters or is identical to the current password, THEN THE Authentication_Service SHALL reject the request with a validation error indicating the invalid new password, SHALL leave the password and all tokens unchanged, and SHALL NOT count the request as a failed login attempt; a new password shorter than 8 characters SHALL be rejected before the current password is verified.
+10. IF an unauthenticated User submits a request to view or update a Profile or to change a password, THEN THE Authentication_Service SHALL reject the request with an authentication error and SHALL leave all accounts unchanged.
+11. THE System SHALL provide a profile page, reachable from the primary navigation by authenticated Users, on which the User sees the email address as read-only text, edits the display name, and changes the password; and a successful password change SHALL leave the User logged in.

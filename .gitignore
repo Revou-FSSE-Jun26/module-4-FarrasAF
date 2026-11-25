@@ -11,3 +11,7 @@ node_modules/
 .kiroignore
 task-management-project-brief.txt
 task-management-app.code-workspace
+.env.local
+.env.production
+test-results/
+playwright-report/

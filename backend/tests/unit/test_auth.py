@@ -1,6 +1,6 @@
 """Unit tests for the Authentication_Service (R15.2, R15.4-R15.8, R15.11, R15.15)."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -204,3 +204,170 @@ def test_successful_login_resets_failure_counter(db_session: Any, clock: Any) ->
     user = db_session.query(User).filter(User.email == EMAIL).one()
     assert user.locked_until is None
     assert _login(PASSWORD)[0]["email"] == EMAIL
+
+
+# --- Profile service (R18.2-R18.10) -------------------------------------------------
+
+NEW_PASSWORD = "a-brand-new-password"
+
+
+def _login_client(client: Any, db_session: Any) -> User:
+    _register()
+    assert (
+        client.post("/api/auth/login", json={"email": EMAIL, "password": PASSWORD}).status_code
+        == 200
+    )
+    user: User = db_session.query(User).filter(User.email == EMAIL).one()
+    return user
+
+
+def _change(client: Any, current: str = PASSWORD, new: str = NEW_PASSWORD) -> Any:
+    return client.post(
+        "/api/auth/me/password", json={"currentPassword": current, "newPassword": new}
+    )
+
+
+def test_display_name_is_trimmed_and_stored(client: Any, db_session: Any) -> None:
+    user = _login_client(client, db_session)
+
+    response = client.patch("/api/auth/me", json={"displayName": "  Alicia  "})
+
+    assert response.status_code == 200
+    assert response.get_json()["displayName"] == "Alicia"
+    db_session.refresh(user)
+    assert user.display_name == "Alicia"
+    assert client.get("/api/auth/me").get_json()["displayName"] == "Alicia"
+
+
+@pytest.mark.parametrize("name", ["", "   ", "x" * 51])
+def test_invalid_display_name_rejected(client: Any, db_session: Any, name: str) -> None:
+    user = _login_client(client, db_session)
+
+    response = client.patch("/api/auth/me", json={"displayName": name})
+
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "validation_error"
+    db_session.refresh(user)
+    assert user.display_name == "Alice"
+
+
+def test_fifty_character_display_name_accepted(client: Any, db_session: Any) -> None:
+    _login_client(client, db_session)
+    response = client.patch("/api/auth/me", json={"displayName": "x" * 50})
+    assert response.status_code == 200
+
+
+def test_email_key_rejected_and_email_unchanged(client: Any, db_session: Any) -> None:
+    user = _login_client(client, db_session)
+
+    response = client.patch(
+        "/api/auth/me", json={"displayName": "Alicia", "email": "other@example.com"}
+    )
+
+    assert response.status_code == 400
+    db_session.refresh(user)
+    assert user.email == EMAIL
+    assert user.display_name == "Alice"
+
+
+def test_rename_appears_in_board_and_team_member_responses(
+    client: Any, db_session: Any, make_board: Any
+) -> None:
+    user = _login_client(client, db_session)
+    board = make_board(admin=user)
+
+    assert client.patch("/api/auth/me", json={"displayName": "Renamed"}).status_code == 200
+
+    members = client.get(f"/api/boards/{board.id}/members").get_json()["items"]
+    assert [m["displayName"] for m in members] == ["Renamed"]
+    team_members = client.get(f"/api/teams/{board.team_id}/members").get_json()["items"]
+    assert [m["displayName"] for m in team_members] == ["Renamed"]
+
+
+def test_password_change_revokes_tokens_issues_cookies_and_resets_failures(
+    client: Any, db_session: Any
+) -> None:
+    user = _login_client(client, db_session)
+    old_hash = user.password_hash
+    user.failed_login_attempts = MAX_FAILED_LOGINS - 1
+    db_session.flush()
+
+    response = _change(client)
+
+    assert response.status_code == 200
+    assert len(_cookie_header(response, "access_token")) == 1
+    assert len(_cookie_header(response, "refresh_token")) >= 1
+    tokens = db_session.query(RefreshToken).all()
+    assert len(tokens) == 2
+    assert sorted(t.revoked for t in tokens) == [False, True]
+    db_session.refresh(user)
+    assert user.password_hash != old_hash
+    assert user.failed_login_attempts == 0
+    assert user.locked_until is None
+    # New password works; old one no longer does.
+    assert _login(NEW_PASSWORD)[0]["email"] == EMAIL
+    with pytest.raises(AuthenticationError):
+        _login(PASSWORD)
+
+
+def test_wrong_current_password_counts_and_third_failure_locks(
+    client: Any, db_session: Any, clock: Any
+) -> None:
+    clock.set(datetime.now(UTC))  # JWT validation uses the real clock
+    user = _login_client(client, db_session)
+
+    for expected in range(1, MAX_FAILED_LOGINS):
+        response = _change(client, current=WRONG)
+        assert response.status_code == 400
+        db_session.refresh(user)
+        assert user.failed_login_attempts == expected
+        assert user.locked_until is None
+
+    assert _change(client, current=WRONG).status_code == 400
+    db_session.refresh(user)
+    assert user.failed_login_attempts == MAX_FAILED_LOGINS
+    assert user.locked_until == clock.now + timedelta(minutes=LOCKOUT_MINUTES)
+    with pytest.raises(AuthenticationError):
+        _login(PASSWORD)
+
+
+def test_locked_account_gets_same_error_even_with_correct_password(
+    client: Any, db_session: Any, clock: Any
+) -> None:
+    clock.set(datetime.now(UTC))  # JWT validation uses the real clock
+    _login_client(client, db_session)
+    wrong_body = _change(client, current=WRONG).get_json()
+    _change(client, current=WRONG)
+    _change(client, current=WRONG)
+
+    locked = _change(client, current=PASSWORD)
+
+    assert locked.status_code == 400
+    assert locked.get_json() == wrong_body
+    # The password was not changed.
+    clock.advance(minutes=LOCKOUT_MINUTES)
+    assert _login(PASSWORD)[0]["email"] == EMAIL
+
+
+@pytest.mark.parametrize(
+    ("new", "current"),
+    [("short", PASSWORD), (PASSWORD, PASSWORD)],
+)
+def test_short_or_unchanged_new_password_not_counted(
+    client: Any, db_session: Any, new: str, current: str
+) -> None:
+    user = _login_client(client, db_session)
+    old_hash = user.password_hash
+
+    response = _change(client, current=current, new=new)
+
+    assert response.status_code == 400
+    db_session.refresh(user)
+    assert user.failed_login_attempts == 0
+    assert user.password_hash == old_hash
+    assert all(not t.revoked for t in db_session.query(RefreshToken).all())
+
+
+def test_unauthenticated_profile_requests_get_401(client: Any) -> None:
+    assert client.patch("/api/auth/me", json={"displayName": "X"}).status_code == 401
+    assert _change(client).status_code == 401

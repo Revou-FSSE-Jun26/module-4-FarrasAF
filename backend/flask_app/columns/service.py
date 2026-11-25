@@ -19,6 +19,27 @@ def _column_dict(column: Column) -> dict[str, Any]:
     }
 
 
+def list_board_columns_service(board_id: UUID) -> list[dict[str, Any]]:
+    """Return the Board's Columns in order, each with its ordered Cards nested."""
+    from flask_app.cards.service import _card_dict
+
+    columns = list(
+        db.session.scalars(
+            select(Column).where(Column.board_id == board_id).order_by(Column.order_index, Column.id)
+        )
+    )
+    cards = db.session.scalars(
+        select(Card).where(Card.board_id == board_id).order_by(Card.order_index, Card.id)
+    )
+    by_column: dict[UUID, list[dict[str, Any]]] = {column.id: [] for column in columns}
+    for card in cards:
+        by_column.setdefault(card.column_id, []).append(_card_dict(card))
+    return [
+        {**_column_dict(column), "created_at": column.created_at, "cards": by_column[column.id]}
+        for column in columns
+    ]
+
+
 def _lock_board_columns(board_id: UUID) -> list[Column]:
     """Lock and return the Board's Columns in order."""
     query = (

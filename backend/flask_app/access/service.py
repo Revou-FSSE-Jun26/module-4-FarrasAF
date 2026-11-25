@@ -9,9 +9,10 @@ from sqlalchemy.orm import joinedload
 
 from flask_app.access.rbac import get_board_role, role_allows
 from flask_app.activity.service import record_activity
+from flask_app.comments.service import list_comments_service
 from flask_app.common.exceptions import AuthorizationError, NotFoundError, ValidationError
 from flask_app.extensions import db
-from flask_app.models import Board, BoardMembership, InvitationLink, TeamMembership, User
+from flask_app.models import Board, BoardMembership, Card, InvitationLink, TeamMembership, User
 
 
 def _member_to_dict(membership: BoardMembership, display_name: str) -> dict[str, Any]:
@@ -148,6 +149,74 @@ def list_invitations_service(board_id: UUID) -> dict[str, Any]:
         .order_by(InvitationLink.created_at.desc(), InvitationLink.id.desc())
     ).all()
     return {"items": [_link_to_dict(link) for link in links]}
+
+
+def resolve_guest_board(token: str) -> Board:
+    """Resolve an Invitation_Link token to its Board, or raise AuthorizationError."""
+    link = db.session.scalar(
+        select(InvitationLink)
+        .options(joinedload(InvitationLink.board))  # type: ignore[arg-type]
+        .where(InvitationLink.token == token)
+    )
+    if link is None or link.status != "active" or link.board.status != "active":
+        raise AuthorizationError("This invitation link is not valid")
+    board: Board = link.board
+    return board
+
+
+def _guest_user(user: User | None) -> dict[str, Any] | None:
+    return None if user is None else {"id": user.id, "display_name": user.display_name}
+
+
+def guest_board_service(token: str) -> dict[str, Any]:
+    """Read-only Board view for a Guest: Columns and Cards, no emails, versions or Activity."""
+    board = resolve_guest_board(token)
+    cards = db.session.scalars(
+        select(Card)
+        .options(joinedload(Card.assignee))  # type: ignore[arg-type]
+        .where(Card.board_id == board.id)
+        .order_by(Card.order_index, Card.id)
+    ).all()
+    by_column: dict[UUID, list[dict[str, Any]]] = {}
+    for card in cards:
+        by_column.setdefault(card.column_id, []).append(
+            {
+                "id": card.id,
+                "column_id": card.column_id,
+                "title": card.title,
+                "description": card.description,
+                "assignee": _guest_user(card.assignee),  # type: ignore[arg-type]
+                "due_date": card.due_date,
+                "order_index": card.order_index,
+                "created_at": card.created_at,
+                "updated_at": card.updated_at,
+            }
+        )
+    return {
+        "id": board.id,
+        "name": board.name,
+        "description": board.description,
+        "current_user_role": "guest",
+        "columns": [
+            {
+                "id": column.id,
+                "name": column.name,
+                "order_index": column.order_index,
+                "cards": by_column.get(column.id, []),
+            }
+            for column in board.columns  # type: ignore[attr-defined]
+        ],
+    }
+
+
+def guest_comments_service(token: str, card_id: UUID) -> dict[str, Any]:
+    """Flat Comment list of a Card on the token's Board, without `version`."""
+    board = resolve_guest_board(token)
+    card = db.session.get(Card, card_id)
+    if card is None or card.board_id != board.id:
+        raise NotFoundError("Card not found")
+    items = list_comments_service(card_id)["items"]
+    return {"items": [{k: v for k, v in item.items() if k != "version"} for item in items]}
 
 
 def revoke_invitation_service(token: str, actor: User) -> dict[str, Any]:

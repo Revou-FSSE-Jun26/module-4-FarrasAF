@@ -28,6 +28,7 @@ def load_config() -> dict[str, Any]:
         "DEBUG": False if is_production else _flag("FLASK_DEBUG", False),
         "SQLALCHEMY_DATABASE_URI": _required("DATABASE_URL"),
         "JWT_SECRET_KEY": _required("JWT_SECRET_KEY"),
+        "API_DOCS_ENABLED": app_env == "development",
         "COOKIE_SECURE": _flag("COOKIE_SECURE", is_production),
         "ACCESS_TOKEN_MINUTES": int(os.environ.get("ACCESS_TOKEN_MINUTES", "15")),
         "REFRESH_TOKEN_DAYS": int(os.environ.get("REFRESH_TOKEN_DAYS", "7")),

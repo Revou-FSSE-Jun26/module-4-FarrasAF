@@ -1,13 +1,17 @@
 from typing import Any
 
-from flask import Flask, Response, request
+from flask import Flask, Response, g, request
 from werkzeug.exceptions import HTTPException
 
-from flask_app.access import access_bp
+from flask_app.access import access_bp, guest_bp
 from flask_app.activity import activity_bp
+from flask_app.analytics import analytics_bp
 from flask_app.auth import auth_bp
 from flask_app.boards import boards_bp
+from flask_app.cards import cards_bp
 from flask_app.columns import columns_bp
+from flask_app.comments import comments_bp
+from flask_app.common.docs import docs_bp
 from flask_app.common.exceptions import (
     INTERNAL_ERROR,
     AppError,
@@ -17,6 +21,8 @@ from flask_app.common.health import health_bp
 from flask_app.common.serialization import json_response, to_camel
 from flask_app.config import load_config
 from flask_app.extensions import db, migrate
+from flask_app.notifications import notifications_bp
+from flask_app.search import search_bp
 from flask_app.teams import teams_bp
 
 
@@ -49,6 +55,17 @@ def _register_error_handlers(app: Flask) -> None:
         return _error_response(500, INTERNAL_ERROR, "Internal server error")
 
 
+def _register_request_logging(app: Flask) -> None:
+    @app.after_request
+    def log_request(response: Response) -> Response:
+        # Route template only: the raw path and query can carry tokens.
+        rule = request.url_rule.rule if request.url_rule is not None else "unmatched"
+        user = g.get("current_user")
+        user_id = user.id if user is not None else "-"
+        app.logger.info("%s %s -> %s user=%s", request.method, rule, response.status_code, user_id)
+        return response
+
+
 def create_app(config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__)
     app.config.update(config if config is not None else load_config())
@@ -59,7 +76,16 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
     app.register_blueprint(teams_bp)
     app.register_blueprint(boards_bp)
     app.register_blueprint(columns_bp)
+    app.register_blueprint(cards_bp)
+    app.register_blueprint(comments_bp)
     app.register_blueprint(activity_bp)
     app.register_blueprint(access_bp)
+    app.register_blueprint(guest_bp)
+    app.register_blueprint(notifications_bp)
+    app.register_blueprint(search_bp)
+    app.register_blueprint(analytics_bp)
+    if app.config.get("API_DOCS_ENABLED", False):
+        app.register_blueprint(docs_bp)
     _register_error_handlers(app)
+    _register_request_logging(app)
     return app

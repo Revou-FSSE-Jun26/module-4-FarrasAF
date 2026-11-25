@@ -9,7 +9,7 @@ Implementation language: Python 3.14 (backend) and TypeScript strict mode (front
 Conventions applied to every task (see steering `tech`, `structure`, `card-conventions`, `backend`, `database`, `frontend`):
 - Route handlers are max 5 lines: `read_json()`/`read_query()` + `load_schema()` + one `*_service` call + `json_response()`.
 - Services raise typed errors, run one transaction per route-called function, and never rename fields.
-- Every property test lives in `backend/tests/properties/test_property_<n>_<short_name>.py`, uses `hypothesis` with `max_examples=100` minimum, and carries the tag `# Feature: task-management-app, Property {n}: {text}`. Each of the 39 design properties maps to exactly one property test sub-task below.
+- Every property test lives in `backend/tests/properties/test_property_<n>_<short_name>.py`, uses `hypothesis` with `max_examples=100` minimum, and carries the tag `# Feature: task-management-app, Property {n}: {text}`. Each of the 40 design properties maps to exactly one property test sub-task below.
 - Every service function also gets a pytest unit test in `backend/tests/unit/test_<module>.py`.
 
 ## Notes
@@ -20,8 +20,8 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
 - Commit after each task with the task number in the message (for example `task 7.1: implement boards module`).
 - Do not mark a task complete if its tests fail.
 - Each backend module task registers its Blueprint in `app.py`, so no code is left unwired; task 13.1 verifies the full wiring. The Guest Blueprint (`guest_bp`) is registered in task 11.3.
-- All 39 correctness properties map to exactly one backend property test sub-task: P1 9.2, P2 10.5, P3 10.6, P4 10.7, P5 7.3, P6 10.3, P7 11.12, P8 10.4, P9 9.3, P10 7.4, P11 11.9, P12 11.8, P13 11.6, P14 11.7, P15 1.4, P16 12.3, P17 12.5, P18 6.2, P19 12.4, P20 11.11, P21 5.2, P22 4.8, P23 8.4, P24 8.5, P25 11.4, P26 4.3, P27 4.4, P28 4.5, P29 4.6, P30 4.7, P31 5.4, P32 7.2, P33 8.3, P34 5.5, P35 10.8, P36 6.3, P37 7.5, P38 7.6, P39 11.10. The same mapping is repeated as a table at the end of this file.
-- Properties 31 to 34, 37, and 38 run against the transactional test database with small generators; pure-logic properties run without the database.
+- All 40 correctness properties map to exactly one backend property test sub-task: P1 9.2, P2 10.5, P3 10.6, P4 10.7, P5 7.3, P6 10.3, P7 11.12, P8 10.4, P9 9.3, P10 7.4, P11 11.9, P12 11.8, P13 11.6, P14 11.7, P15 1.4, P16 12.3, P17 12.5, P18 6.2, P19 12.4, P20 11.11, P21 5.2, P22 4.8, P23 8.4, P24 8.5, P25 11.4, P26 4.3, P27 4.4, P28 4.5, P29 4.6, P30 4.7, P31 5.4, P32 7.2, P33 8.3, P34 5.5, P35 10.8, P36 6.3, P37 7.5, P38 7.6, P39 11.10, P40 4.12. The same mapping is repeated as a table at the end of this file.
+- Properties 31 to 34, 37, 38, and 40 run against the transactional test database with small generators; pure-logic properties run without the database.
 - Load/p95 (R14.1) and availability (R14.2) are design targets validated outside this task list; only the health endpoint and responsive layout are implemented and tested here.
 - Do not add dependencies outside the `tech.md` stack, Docker, WebSockets, or Supabase client libraries.
 
@@ -112,7 +112,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Frontend (from `frontend/`): `npm run lint`, `npm run build`, `npx playwright test` (skip while no E2E specs exist)
     - Fix every failure, ask the user if questions arise, then commit with the checkpoint number in the message
 
-- [ ] 4. Authentication_Service
+- [x] 4. Authentication_Service
   - [x] 4.1 Implement the `auth/` module
     - `service.py`: register (account only, argon2 hash, duplicate email is a `ValidationError`), login (generic error, lockout after 3 consecutive failures for 15 minutes via `utc_now()`, counter reset on success and after the window), refresh (valid, non-revoked, non-expired token yields identity-only access token), logout (revoke refresh token), `me`
     - `schema.py` (email format, password >= 8 and never trimmed, `display_name` 1-50 trimmed), `routes.py` (public register/login/refresh/logout, `GET /api/auth/me`), `set_auth_cookies()` / `clear_auth_cookies()` (`HttpOnly`, `SameSite=Lax`, no `Domain`, `Secure` from `COOKIE_SECURE`, refresh cookie scoped to `/api/auth/refresh` and `/api/auth/logout`), `@token_required` decorator, refresh tokens stored hashed from `secrets.token_urlsafe`
@@ -161,6 +161,22 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Verify through the Vercel domain (open `/api/health` first to wake the free-tier backend): `curl -i https://<vercel-domain>/api/health` returns 200; register a test User, then `curl -i -X POST https://<vercel-domain>/api/auth/login` with that User and confirm the `Set-Cookie` headers arrive unchanged (both cookies present, `HttpOnly`, `SameSite=Lax`, `Secure`, no `Domain`, refresh cookie `Path` limited to `/api/auth/refresh`, and tokens absent from the body) by comparing with the same request sent straight to the Render URL
     - Create the root `README.md` if it does not exist yet and record the URLs (without secrets), the commands used, and the results under a "Deployment notes" heading
     - _Requirements: 14.2, 15.2_
+
+  - [x] 4.10 Implement the Profile endpoints in the `auth/` module
+    - `service.py`: `update_profile_service(user, payload)` (trimmed display name 1-50) and `change_password_service(user, payload)` in one transaction: verify the current password with argon2 (a locked account or a wrong password raises the same `ValidationError` on `currentPassword`; a wrong password increments `failed_login_attempts` and locks on the third failure like login, and that increment is committed even though the request fails), reject a new password equal to the current one without counting it, then replace the hash, reset `failed_login_attempts` and `locked_until`, revoke every `RefreshToken` of the User, and return the User identity so the route can call `set_auth_cookies()` with a new token pair
+    - `schema.py`: `UpdateProfileSchema` (only `display_name`, trimmed 1-50, `unknown = RAISE` so `email` and any other key is rejected with the field named) and `ChangePasswordSchema` (`current_password` required; `new_password` at least 8 characters, never trimmed; a short value fails before the current password is checked)
+    - `routes.py`: `PATCH /api/auth/me` and `POST /api/auth/me/password` with `@token_required`, thin handlers; the new routes are authenticated (no public endpoint is added); no version field; never log or return passwords, hashes, or tokens
+    - No new column or migration
+    - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7, 18.8, 18.9, 18.10_
+
+  - [x] 4.11 Write unit tests for the Profile service
+    - `tests/unit/test_auth.py`: display name trimmed and stored (R18.2), blank or 51-character name rejected (R18.3), `email` key rejected and email unchanged (R18.4), a rename appears in a later Board or Team member response (R18.5), password change success revokes all refresh tokens, issues new cookies, and resets the failure count (R18.6), wrong current password counts toward lockout and the third failure locks the account (R18.7), locked account gets the same error as a wrong password even with the correct one (R18.8), short or unchanged new password rejected without counting a failure (R18.9), unauthenticated requests get `401` (R18.10)
+    - _Requirements: 18.2, 18.3, 18.4, 18.5, 18.6, 18.7, 18.8, 18.9, 18.10_
+
+  - [x] 4.12 Write property test for Profile updates
+    - File: `tests/properties/test_property_40_profile.py`
+    - **Property 40: Profile updates validate the display name and password changes require the current password**
+    - **Validates: Requirements 18.2, 18.3, 18.4, 18.6, 18.7, 18.8, 18.9**
 
 - [x] 5. RBAC and Team_Service
   - [x] 5.1 Implement RBAC in `access/rbac.py`
@@ -294,32 +310,32 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - _Requirements: 2.1, 2.2, 2.6, 2.7, 2.8, 8.8, 8.9_
 
 - [ ] 10. Card_Service
-  - [ ] 10.1 Implement Card create, read, edit, and delete
+  - [x] 10.1 Implement Card create, read, edit, and delete
     - `service.py`: create (append at end, `version = 1`, `created_at == updated_at`), get (includes `version`), PATCH (atomic multi-field validation first; Assignee must be a current Board Member; conditional `UPDATE ... WHERE version = :expected`; missing `version` raises `ConflictError`; sets `updated_at` explicitly and increments `version`), delete (no `version` required, reindex column); record `card_created` / `card_updated` / `card_deleted` in the same transaction
     - `schema.py` (`version` never `required`, strict int when present), `routes.py` per the Card_Service table; register Blueprint in `app.py`
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 8.1, 8.2, 8.5_
 
-  - [ ] 10.2 Implement Card move and reorder
+  - [x] 10.2 Implement Card move and reorder
     - `move_card_service(card_id, target_column_id, target_index, actor)`: target Column must belong to the same Board, target index an integer in `[0, count-in-target-after-removal]`; lock affected Column rows with `with_for_update()`, `reindex()` source and target, set `updated_at` only on the moved Card, never change `version`, record `card_moved` once, commit once
     - Add schema and the `POST /api/cards/{cardId}/move` route (no `version`)
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 13.6, 8.3_
 
-  - [ ] 10.3 Write property test for atomic Card edits
+  - [x] 10.3 Write property test for atomic Card edits
     - File: `tests/properties/test_property_06_card_edit_atomic.py`
     - **Property 6: Card edit is atomic across multiple fields**
     - **Validates: Requirements 3.3, 3.10**
 
-  - [ ] 10.4 Write property test for Assignee membership
+  - [x] 10.4 Write property test for Assignee membership
     - File: `tests/properties/test_property_08_assignee_membership.py`
     - **Property 8: Assignment requires board membership**
     - **Validates: Requirements 3.4, 3.8**
 
-  - [ ] 10.5 Write property test for Card ordering
+  - [x] 10.5 Write property test for Card ordering
     - File: `tests/properties/test_property_02_card_ordering.py`
     - **Property 2: Card ordering is always contiguous from zero**
     - **Validates: Requirements 3.2, 3.5, 4.1, 4.2**
 
-  - [ ] 10.6 Write property test for position persistence
+  - [x] 10.6 Write property test for position persistence
     - File: `tests/properties/test_property_03_card_position_roundtrip.py`
     - **Property 3: Card position round-trip persistence**
     - **Validates: Requirements 4.3**
@@ -339,22 +355,22 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - _Requirements: 3.1, 3.2, 3.6, 3.9, 4.6, 13.1, 13.4_
 
 - [ ] 11. Notification_Service, Comment_Service, and Guest routes
-  - [ ] 11.1 Implement the `notifications/` module
+  - [x] 11.1 Implement the `notifications/` module
     - `service.py`: `create_mention_notifications()` helper (adds only; one unread Notification per distinct mentioned current Board Member), cursor-paginated list (50 per page, `created_at DESC, id DESC`, `unread_only` filter, `{ items, nextCursor }`), mark as read (recipient only, else `AuthorizationError`)
     - `schema.py` (`cursor`, `unread_only`), `routes.py` with `@token_required`; malformed cursor gives `ValidationError` and no items; register Blueprint in `app.py`
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10_
 
-  - [ ] 11.2 Implement the `comments/` module with mentions
+  - [x] 11.2 Implement the `comments/` module with mentions
     - `service.py`: pure mention parser extracting distinct valid UUIDs from `@[<uuid>]` tokens; create top-level and reply (parent must exist on the same Card), list as a flat oldest-first list with `parent_comment_id`, edit (author only, `version` required, conditional `UPDATE` sets `edited_at` and increments `version`), delete (author only, cascades to the reply subtree, no `version`); create runs the parser, creates Notifications and the `comment_created` Activity_Entry in the same transaction and never rejects a Comment for an invalid mention; record `comment_edited` / `comment_deleted`
     - `schema.py` (`NonBlankStr`, max 5000), `routes.py` per the Comment_Service table; register Blueprint in `app.py`
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 6.1, 6.8, 13.1, 13.2, 13.3, 13.5, 13.6, 8.4, 8.6, 8.7_
 
-  - [ ] 11.3 Implement the anonymous Guest routes
+  - [x] 11.3 Implement the anonymous Guest routes
     - `access/service.py`: one function resolving a token to its Board (unknown, inactive, revoked, or archived-Board token raises `AuthorizationError`; Card outside the Board raises `NotFoundError`); Guest read functions reuse the Comment list from task 11.2
     - `access/routes.py`: `guest_bp` with `GET /api/guest/<token>/board` and `GET /api/guest/<token>/cards/<uuid:card_id>/comments`, no authentication, responses expose Users only as `{ id, displayName }` and never emails, `version`, or Activity; any non-GET method on `/api/guest/` returns 403 `AuthorizationError`; register `guest_bp` in `app.py`; Invitation_Link generate, list, and revoke stay in task 8.2
     - _Requirements: 11.3, 11.4, 11.5, 11.6, 11.8_
 
-  - [ ] 11.4 Write property test for invitation links and Guest access
+  - [x] 11.4 Write property test for invitation links and Guest access
     - File: `tests/properties/test_property_25_invitation_guest_access.py`
     - **Property 25: Invitation link generation, isolation, and anonymous Guest access control**
     - **Validates: Requirements 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8**
@@ -383,7 +399,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - **Property 11: Comment deletion removes the entire reply subtree**
     - **Validates: Requirements 5.4**
 
-  - [ ] 11.10 Write property test for Comment ownership
+  - [x] 11.10 Write property test for Comment ownership
     - File: `tests/properties/test_property_39_comment_ownership.py`
     - **Property 39: Only the author can edit or delete a Comment**
     - **Validates: Requirements 5.5**
@@ -398,17 +414,17 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - **Property 7: Input validation rejects invalid values and leaves state unchanged**
     - **Validates: Requirements 1.8, 2.6, 3.7, 5.7**
 
-  - [ ] 11.13 Write unit tests for notifications and comments
+  - [x] 11.13 Write unit tests for notifications and comments
     - `tests/unit/test_notifications.py` and `tests/unit/test_comments.py`: mark-as-read (R6.5), marking another user's Notification (R6.9), malformed cursor (R6.10), mention parser examples (duplicates, invalid ids, non-members), Guest rejection (R5.6) with three cases (a non-GET request to `/api/guest/<token>/...` returns 403 `AuthorizationError`; an authenticated User with no role on the Board returns 403 `AuthorizationError`; a request without cookies to an authenticated route returns 401 `AuthenticationError`, since Guests are anonymous)
     - _Requirements: 5.6, 6.5, 6.9, 6.10_
 
 - [ ] 12. Search_Service and Analytics_Service
-  - [ ] 12.1 Implement the `search/` module
+  - [x] 12.1 Implement the `search/` module
     - `service.py`: keyword 1-100 non-blank chars, escape `%`, `_`, `\` before a case-insensitive `ILIKE`, restrict to accessible Boards, include Board and Column per result, order `updated_at DESC, id DESC`, cap 100, eager-load to avoid N+1
     - `schema.py` (`q`), `routes.py` `GET /api/search/cards` with `@token_required`; register Blueprint in `app.py`
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
 
-  - [ ] 12.2 Implement the `analytics/` module
+  - [x] 12.2 Implement the `analytics/` module
     - `service.py`: `totalCards`, `perColumn`, `completionRate` (sum over all Columns named exactly "Done" divided by total; 0 when no cards or no "Done" column), `activityByDay` grouped by UTC day; pure completion-rate function kept side-effect-free
     - `routes.py` `GET /api/boards/{boardId}/analytics` with `@require_role('member')`; no `schema.py` (no body or query); register Blueprint in `app.py`
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
@@ -429,7 +445,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - **Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.13**
 
 - [ ] 13. Backend integration and seed data
-  - [ ] 13.1 Finalize app wiring, logging, and the seed script
+  - [x] 13.1 Finalize app wiring, logging, and the seed script
     - Verify every Blueprint is registered in `app.py`; add request logging by route template only (`request.url_rule.rule` or `unmatched`, method, status, user id; never raw path, query, cookies, bodies, tokens, or Comment text)
     - `scripts/seed.py` (run with `python -m scripts.seed`): idempotent demo and E2E data (users, a Team with a Team_Admin and a regular member, a Board with default Columns and Cards, a Comment thread, an active Invitation_Link)
     - _Requirements: 1.2, 11.1, 12.6, 14.2_
@@ -444,59 +460,71 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Frontend (from `frontend/`): `npm run lint`, `npm run build`, `npx playwright test` (skip while no E2E specs exist)
     - Fix every failure, ask the user if questions arise, then commit with the checkpoint number in the message
 
-- [ ] 15. Frontend foundation
-  - [ ] 15.1 Create API types and the typed API client
+- [x] 15. Frontend foundation
+  - [x] 15.1 Create API types and the typed API client
     - `src/types/api.ts`: camelCase types for every response shape in the design's API Response Schemas (User, Team, TeamMember, TeamJoinLink, TeamJoinLinkPreview, Board without `updatedAt`, BoardMember, Column, Card, Comment, Notification, ActivityEntry, InvitationLink, Analytics, Guest shapes, paginated responses, error envelope) plus request types; no `any`
     - `src/lib/apiClient.ts`: one typed method per backend endpoint (all later frontend tasks reuse it), same-origin `/api/...` only, no token handling or storage, one refresh-and-retry on `401` (redirect to `/login` except on `/login`, `/register`, `/invite/[token]`; `/join/[token]` returns to the same link after login), no JSON parsing for `204`
     - _Requirements: 15.2, 15.10, 15.11, 15.12, 13.2_
 
-  - [ ] 15.2 Create shared primitives and state components
+  - [x] 15.2 Create shared primitives and state components
     - `src/components/shared/`: `BaseButton`, `BaseInput`, `BaseModal`, `BaseToast`, and loading, empty, and error state components
     - _Requirements: 14.3, 14.4_
 
-  - [ ] 15.3 Implement authentication UI and the app shell
+  - [x] 15.3 Implement authentication UI and the app shell
     - `useAuth` hook, `/login` and `/register` pages (generic login error, client validation for UX only), authenticated layout with primary navigation linking every route (teams, boards, search) and logout
     - _Requirements: 15.1, 15.2, 15.3, 15.8, 15.9, 15.14, 15.16_
+  - [x] 15.4 Implement frontend error handling, toasts, and error boundaries
+    - `src/lib/errorHandler.ts` (`getErrorMessage`, `logError`, generic message; console output in development only), `useToast` hook and `BaseToastProvider` in the root layout (stacked, de-duplicated toasts, `unhandledrejection` and `error` listeners), `BaseToast` positioned by its container
+    - `BaseErrorFallback` plus `app/error.tsx`, `app/(app)/error.tsx`, `app/global-error.tsx`, `app/not-found.tsx`; the caught error is never rendered
+    - Hooks and forms show failed actions through `showError`; page-load failures keep `BaseErrorState` and also toast; field validation stays inline; login shows a toast only for 5xx and network failures; removed the per-hook `actionError` state and `messageOf` helpers
+    - _Requirements: 14.6, 14.7, 14.8, 14.9, 15.3_
 
-- [ ] 16. Teams UI
-  - [ ] 16.1 Implement Teams pages and join flow
+  - [x] 15.5 Implement the profile page
+    - `src/types/api.ts` request types (`UpdateProfileRequest`, `ChangePasswordRequest`) and `apiClient.ts` methods `updateProfile` (`PATCH /api/auth/me`) and `changePassword` (`POST /api/auth/me/password`); no token handling; both calls use the normal refresh-and-retry path on `401` (only login, register, refresh, and logout are excluded)
+    - `useProfile` hook, `/profile` page under `src/app/(app)/profile/`, components under `src/components/profile/`: read-only email, display name form (trim and 1-50 check for UX only, inline field errors), change-password form (current, new at least 8 characters, confirm that must match; clear all fields after success); a failed action shows a toast per task 15.4, and a wrong current password shows an inline error on that field
+    - After a successful rename `useAuth` updates the shown display name; after a password change the User stays logged in (the server sets new cookies)
+    - Add a "Profile" link to the primary navigation in the app shell
+    - _Requirements: 18.1, 18.2, 18.3, 18.6, 18.7, 18.9, 18.11_
+
+- [x] 16. Teams UI
+  - [x] 16.1 Implement Teams pages and join flow
     - `useTeams` hook, `/teams` (list and create), `/teams/[teamId]` (members; join-link create, list, revoke shown only when `currentUserTeamRole` is `team_admin`), `/join/[token]` (preview the Team name, call accept only after confirmation, one generic invalid-link message, login redirect and return)
     - Components under `src/components/team/`
     - _Requirements: 16.1, 16.3, 16.4, 17.1, 17.2, 17.3, 17.4, 17.8, 17.9_
 
-- [ ] 17. Boards, Cards, and collaboration UI
-  - [ ] 17.1 Implement Board list and settings pages
+- [x] 17. Boards, Cards, and collaboration UI
+  - [x] 17.1 Implement Board list and settings pages
     - `useBoards` hook, `/boards` (list, create in a chosen Team, archived filter), `/boards/[boardId]/settings` (edit, archive, restore, delete, members and roles, Invitation_Links) with role-aware controls from `currentUserRole`
     - _Requirements: 1.1, 1.3, 1.4, 1.5, 1.6, 1.13, 10.1, 10.3, 10.9, 11.1, 11.2, 11.9_
 
-  - [ ] 17.2 Implement the Board view
+  - [x] 17.2 Implement the Board view
     - `useBoard` hook, `/boards/[boardId]` with Columns and Cards, Admin-only Column controls (add, rename, reorder, delete), add Card, loading/empty/error states, responsive layout (`lg:` breakpoint: full board without horizontal scroll at >= 1024px, stacked and usable below)
     - Components under `src/components/board/` and `src/components/card/`
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 14.3, 14.4_
 
-  - [ ] 17.3 Implement drag-and-drop
+  - [x] 17.3 Implement drag-and-drop
     - Pure helper in `src/lib/` computing target Column id and target index; `useDragAndDrop` hook using `@dnd-kit/core` and `@dnd-kit/sortable` with optimistic reorder, reconciliation with the server response, and rollback with an error message on failure; Guests and non-writers cannot drag
     - _Requirements: 4.1, 4.2, 4.3, 4.6_
 
-  - [ ] 17.4 Implement the Card detail modal
+  - [x] 17.4 Implement the Card detail modal
     - Edit Title, Description, Assignee (Board members), Due date; send `version` on every edit and on a `409` refetch and inform the user; delete Card
     - _Requirements: 3.3, 3.4, 3.5, 13.1, 13.2, 13.5_
 
-  - [ ] 17.5 Implement Comments and Mentions
+  - [x] 17.5 Implement Comments and Mentions
     - `useComments` hook, flat list built into a thread tree in the client from `parentCommentId`, reply, edit (own, with `version`), delete (own), mention picker inserting `@[<userId>]` from the Board members list, tokens rendered as plain-text `@displayName` (or `@unknown`); no `dangerouslySetInnerHTML`
     - Components under `src/components/comment/`, integrated into the Card detail modal
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 13.2_
 
-  - [ ] 17.6 Implement the Notification bell
+  - [x] 17.6 Implement the Notification bell
     - `useNotifications` polling the newest page without a cursor on an interval; "Load more" uses `nextCursor` for older pages; unread-only filter; mark as read; integrated into the app shell
     - Components under `src/components/notification/`
     - _Requirements: 6.2, 6.3, 6.4, 6.5, 6.6_
 
-  - [ ] 17.7 Implement Search, Activity, and Analytics pages
+  - [x] 17.7 Implement Search, Activity, and Analytics pages
     - `/search` (keyword validation, results with Board and Column), `/boards/[boardId]/activity` (page-index navigation, empty page state), `/boards/[boardId]/analytics` (total, per-column counts, completion rate, activity by day)
     - _Requirements: 7.1, 7.2, 7.5, 8.12, 8.13, 8.15, 9.1, 9.2, 9.3, 9.5_
 
-  - [ ] 17.8 Implement the Guest page
+  - [x] 17.8 Implement the Guest page
     - `/invite/[token]` calls only the two Guest endpoints through `apiClient`, renders read-only with no write controls, never redirects to `/login`, builds the Comment tree from `parentCommentId`, and shows one generic "link not available" message on `403`
     - _Requirements: 11.3, 11.4, 11.5, 11.6, 11.8_
 
@@ -507,41 +535,45 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Fix every failure, ask the user if questions arise, then commit with the checkpoint number in the message
 
 - [ ] 19. Playwright end-to-end tests
-  - [ ] 19.1 Create E2E fixtures and helpers
+  - [x] 19.1 Create E2E fixtures and helpers
     - `frontend/e2e/fixtures.ts`: helpers that create unique users, Teams, Boards, Cards, and Invitation_Links through the API (and the seed script for baseline data) so every test sets up its own data against the dedicated E2E test database configured in `playwright.config.ts` (task 1.6); accessible locators first, `data-testid` only for draggable Cards, no `waitForTimeout`
     - _Requirements: 14.5_
 
-  - [ ] 19.2 Write auth E2E tests
+  - [x] 19.2 Write auth E2E tests
     - `frontend/e2e/auth.spec.ts`: register, login, generic login error, logout, protected-route redirect to `/login`
     - _Requirements: 15.1, 15.2, 15.3, 15.8, 15.9_
 
-  - [ ] 19.3 Write Team and join-link E2E tests
+  - [x] 19.3 Write Team and join-link E2E tests
     - `frontend/e2e/teams.spec.ts`: create a Team, generate a join link, a second user previews and accepts it, invalid or revoked link message, regular members do not see link controls
     - _Requirements: 16.1, 16.4, 17.1, 17.2, 17.3, 17.4_
 
-  - [ ] 19.4 Write Board, Column, and Card CRUD E2E tests
+  - [x] 19.4 Write Board, Column, and Card CRUD E2E tests
     - `frontend/e2e/boards.spec.ts`: create a Board with default Columns, add, rename, and delete Columns (non-empty delete rejected), create, edit, assign, and delete Cards, archive and restore, role-aware controls for a Member
     - _Requirements: 1.1, 1.2, 1.4, 1.5, 2.1, 2.2, 2.4, 3.1, 3.3, 3.4, 3.5_
 
-  - [ ] 19.5 Write drag-and-drop E2E tests
+  - [x] 19.5 Write drag-and-drop E2E tests
     - `frontend/e2e/drag-and-drop.spec.ts`: move a Card across Columns and reorder within a Column, order persists after reload
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 19.6 Write Comment, Mention, and Notification E2E tests
+  - [x] 19.6 Write Comment, Mention, and Notification E2E tests
     - `frontend/e2e/comments.spec.ts`: create a Comment, reply, edit, delete, mention another Member and see the Notification appear for them via polling and mark it read
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 6.1, 6.5_
 
-  - [ ] 19.7 Write search E2E tests
+  - [x] 19.7 Write search E2E tests
     - `frontend/e2e/search.spec.ts`: case-insensitive title search with Board and Column shown, no-match empty state, blank keyword rejected
     - _Requirements: 7.1, 7.2, 7.4, 7.5_
 
-  - [ ] 19.8 Write Guest access E2E tests
+  - [x] 19.8 Write Guest access E2E tests
     - `frontend/e2e/guest.spec.ts`: anonymous visit of `/invite/[token]` shows the Board read-only with no write controls, a revoked or unknown token shows the generic message
     - _Requirements: 11.3, 11.4, 11.5, 11.6_
 
-  - [ ] 19.9 Write responsive layout E2E tests
+  - [x] 19.9 Write responsive layout E2E tests
     - `frontend/e2e/responsive.spec.ts`: at >= 1024px the Board has no horizontal page scroll; below 1024px controls stay visible and non-overlapping
     - _Requirements: 14.3, 14.4_
+
+  - [ ] 19.10 Write Profile E2E tests
+    - `frontend/e2e/profile.spec.ts`: change the display name and see it in the app shell and on the Team members page, invalid (blank) name shows an inline error, change the password and stay logged in, log out and log in with the new password, the old password is rejected with the generic login error, a wrong current password shows the inline error, and `/profile` redirects to `/login` when logged out; every test creates its own user
+    - _Requirements: 18.1, 18.2, 18.3, 18.5, 18.6, 18.7, 18.10, 18.11_
 
 - [ ] 20. Documentation, production seed, and smoke test
   - [ ] 20.1 Write the README
@@ -559,6 +591,16 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Check the headers: `curl -I https://<vercel-domain>/invite/<any-token>` and `curl -I https://<vercel-domain>/join/<any-token>` both return `Referrer-Policy: no-referrer`
     - Record the date, results, and any defects in the README "Deployment notes"; fix defects before the final checkpoint
     - _Requirements: 1.1, 4.1, 11.3, 15.2, 17.3_
+
+  - [x] 20.4 Add API documentation (Swagger UI)
+    - Write `backend/openapi.yaml` (OpenAPI 3.0.3) covering every endpoint, request body, query parameter, response shape, error response, and the cookie security schemes, matching the "API Response Schemas" in `design.md`
+    - Add `backend/flask_app/common/docs.py` (`docs_bp`: `GET /api/docs` Swagger UI from a CDN and `GET /api/docs/openapi.yaml`), add `API_DOCS_ENABLED` to `config.py` (true only when `APP_ENV=development`), and register `docs_bp` in `app.py` only when enabled; add no new dependency
+    - Verified: the spec passes `openapi-spec-validator`, its 48 operations match the registered Flask routes exactly, the docs routes return 200 when enabled and 404 when disabled
+    - _Requirements: none (development tooling; see CHANGELOG v18)_
+
+  - [ ] 20.5 Document the Profile endpoints in the OpenAPI file
+    - Add `PATCH /api/auth/me` and `POST /api/auth/me/password` to `backend/openapi.yaml` (request bodies, `User` response, `400` and `401` errors, cookie security scheme; the password route also sets cookies), and re-check that the spec still validates and its operations (now 50) match the registered Flask routes exactly
+    - _Requirements: none (development tooling; documents 18.2 and 18.6)_
 
 - [ ] 21. Final checkpoint - Ensure all tests pass
   - [ ] 21.1 Run all checks and commit
@@ -691,9 +733,13 @@ Sub-task numbers that implement or test each acceptance criterion.
 | R14.3 | 1.6, 15.2, 17.2, 19.9 |
 | R14.4 | 1.6, 15.2, 17.2, 19.9 |
 | R14.5 | 11.11, 13.2, 19.1 |
+| R14.6 | 15.4 |
+| R14.7 | 15.4 |
+| R14.8 | 15.4 |
+| R14.9 | 15.4 |
 | R15.1 | 2.1, 2.3, 4.1, 4.3, 15.3, 19.2 |
 | R15.2 | 4.1, 4.2, 4.9, 15.1, 15.3, 19.2, 20.3 |
-| R15.3 | 1.2, 4.1, 4.4, 15.3, 19.2 |
+| R15.3 | 1.2, 4.1, 4.4, 15.3, 15.4, 19.2 |
 | R15.4 | 2.1, 4.1, 4.2, 4.7, 13.2 |
 | R15.5 | 1.2, 4.1, 4.2, 4.7, 13.2 |
 | R15.6 | 4.1, 4.2, 4.7 |
@@ -722,6 +768,17 @@ Sub-task numbers that implement or test each acceptance criterion.
 | R17.7 | 5.3, 5.5 |
 | R17.8 | 5.3, 5.6, 16.1 |
 | R17.9 | 5.3, 5.6, 16.1 |
+| R18.1 | 4.10, 4.11, 15.5, 19.10 |
+| R18.2 | 4.10, 4.11, 4.12, 15.5, 19.10, 20.5 |
+| R18.3 | 4.10, 4.11, 4.12, 15.5, 19.10 |
+| R18.4 | 4.10, 4.11, 4.12 |
+| R18.5 | 4.10, 4.11, 19.10 |
+| R18.6 | 4.10, 4.11, 4.12, 15.5, 19.10, 20.5 |
+| R18.7 | 4.10, 4.11, 4.12, 15.5, 19.10 |
+| R18.8 | 4.10, 4.11, 4.12 |
+| R18.9 | 4.10, 4.11, 4.12, 15.5 |
+| R18.10 | 4.10, 4.11, 19.10 |
+| R18.11 | 15.5, 19.10 |
 
 ## Property-to-Task Mapping
 
@@ -768,6 +825,7 @@ Each design property maps to exactly one backend property test sub-task.
 | P37 Board list reflects the caller's roles and the archived filter | 7.5 | `test_property_37_board_list.py` |
 | P38 Visibility does not change who can access a Board | 7.6 | `test_property_38_visibility_no_effect.py` |
 | P39 Only the author can edit or delete a Comment | 11.10 | `test_property_39_comment_ownership.py` |
+| P40 Profile updates validate the display name and password changes require the current password | 4.12 | `test_property_40_profile.py` |
 
 ## Task Dependency Graph
 
@@ -797,88 +855,96 @@ Each design property maps to exactly one backend property test sub-task.
     { "id": 20, "tasks": ["4.7"] },
     { "id": 21, "tasks": ["4.8"] },
     { "id": 22, "tasks": ["4.9"] },
-    { "id": 23, "tasks": ["5.1"] },
-    { "id": 24, "tasks": ["5.2"] },
-    { "id": 25, "tasks": ["5.3"] },
-    { "id": 26, "tasks": ["5.4"] },
-    { "id": 27, "tasks": ["5.5"] },
-    { "id": 28, "tasks": ["5.6"] },
-    { "id": 29, "tasks": ["6.1"] },
-    { "id": 30, "tasks": ["6.2"] },
-    { "id": 31, "tasks": ["6.3"] },
-    { "id": 32, "tasks": ["7.1"] },
-    { "id": 33, "tasks": ["7.2"] },
-    { "id": 34, "tasks": ["7.3"] },
-    { "id": 35, "tasks": ["7.4"] },
-    { "id": 36, "tasks": ["7.5"] },
-    { "id": 37, "tasks": ["7.6"] },
-    { "id": 38, "tasks": ["7.7"] },
-    { "id": 39, "tasks": ["8.1"] },
-    { "id": 40, "tasks": ["8.2"] },
-    { "id": 41, "tasks": ["8.3"] },
-    { "id": 42, "tasks": ["8.4"] },
-    { "id": 43, "tasks": ["8.5"] },
-    { "id": 44, "tasks": ["8.6"] },
-    { "id": 45, "tasks": ["9.1"] },
-    { "id": 46, "tasks": ["9.2"] },
-    { "id": 47, "tasks": ["9.3"] },
-    { "id": 48, "tasks": ["9.4"] },
-    { "id": 49, "tasks": ["10.1"] },
-    { "id": 50, "tasks": ["10.2"] },
-    { "id": 51, "tasks": ["10.3"] },
-    { "id": 52, "tasks": ["10.4"] },
-    { "id": 53, "tasks": ["10.5"] },
-    { "id": 54, "tasks": ["10.6"] },
-    { "id": 55, "tasks": ["10.7"] },
-    { "id": 56, "tasks": ["10.8"] },
-    { "id": 57, "tasks": ["10.9"] },
-    { "id": 58, "tasks": ["11.1"] },
-    { "id": 59, "tasks": ["11.2"] },
-    { "id": 60, "tasks": ["11.3"] },
-    { "id": 61, "tasks": ["11.4"] },
-    { "id": 62, "tasks": ["11.5"] },
-    { "id": 63, "tasks": ["11.6"] },
-    { "id": 64, "tasks": ["11.7"] },
-    { "id": 65, "tasks": ["11.8"] },
-    { "id": 66, "tasks": ["11.9"] },
-    { "id": 67, "tasks": ["11.10"] },
-    { "id": 68, "tasks": ["11.11"] },
-    { "id": 69, "tasks": ["11.12"] },
-    { "id": 70, "tasks": ["11.13"] },
-    { "id": 71, "tasks": ["12.1"] },
-    { "id": 72, "tasks": ["12.2"] },
-    { "id": 73, "tasks": ["12.3"] },
-    { "id": 74, "tasks": ["12.4"] },
-    { "id": 75, "tasks": ["12.5"] },
-    { "id": 76, "tasks": ["13.1"] },
-    { "id": 77, "tasks": ["13.2"] },
-    { "id": 78, "tasks": ["14.1"] },
-    { "id": 79, "tasks": ["15.1"] },
-    { "id": 80, "tasks": ["15.2"] },
-    { "id": 81, "tasks": ["15.3"] },
-    { "id": 82, "tasks": ["16.1"] },
-    { "id": 83, "tasks": ["17.1"] },
-    { "id": 84, "tasks": ["17.2"] },
-    { "id": 85, "tasks": ["17.3"] },
-    { "id": 86, "tasks": ["17.4"] },
-    { "id": 87, "tasks": ["17.5"] },
-    { "id": 88, "tasks": ["17.6"] },
-    { "id": 89, "tasks": ["17.7"] },
-    { "id": 90, "tasks": ["17.8"] },
-    { "id": 91, "tasks": ["18.1"] },
-    { "id": 92, "tasks": ["19.1"] },
-    { "id": 93, "tasks": ["19.2"] },
-    { "id": 94, "tasks": ["19.3"] },
-    { "id": 95, "tasks": ["19.4"] },
-    { "id": 96, "tasks": ["19.5"] },
-    { "id": 97, "tasks": ["19.6"] },
-    { "id": 98, "tasks": ["19.7"] },
-    { "id": 99, "tasks": ["19.8"] },
-    { "id": 100, "tasks": ["19.9"] },
-    { "id": 101, "tasks": ["20.1"] },
-    { "id": 102, "tasks": ["20.2"] },
-    { "id": 103, "tasks": ["20.3"] },
-    { "id": 104, "tasks": ["21.1"] }
+    { "id": 23, "tasks": ["4.10"] },
+    { "id": 24, "tasks": ["4.11"] },
+    { "id": 25, "tasks": ["4.12"] },
+    { "id": 26, "tasks": ["5.1"] },
+    { "id": 27, "tasks": ["5.2"] },
+    { "id": 28, "tasks": ["5.3"] },
+    { "id": 29, "tasks": ["5.4"] },
+    { "id": 30, "tasks": ["5.5"] },
+    { "id": 31, "tasks": ["5.6"] },
+    { "id": 32, "tasks": ["6.1"] },
+    { "id": 33, "tasks": ["6.2"] },
+    { "id": 34, "tasks": ["6.3"] },
+    { "id": 35, "tasks": ["7.1"] },
+    { "id": 36, "tasks": ["7.2"] },
+    { "id": 37, "tasks": ["7.3"] },
+    { "id": 38, "tasks": ["7.4"] },
+    { "id": 39, "tasks": ["7.5"] },
+    { "id": 40, "tasks": ["7.6"] },
+    { "id": 41, "tasks": ["7.7"] },
+    { "id": 42, "tasks": ["8.1"] },
+    { "id": 43, "tasks": ["8.2"] },
+    { "id": 44, "tasks": ["8.3"] },
+    { "id": 45, "tasks": ["8.4"] },
+    { "id": 46, "tasks": ["8.5"] },
+    { "id": 47, "tasks": ["8.6"] },
+    { "id": 48, "tasks": ["9.1"] },
+    { "id": 49, "tasks": ["9.2"] },
+    { "id": 50, "tasks": ["9.3"] },
+    { "id": 51, "tasks": ["9.4"] },
+    { "id": 52, "tasks": ["10.1"] },
+    { "id": 53, "tasks": ["10.2"] },
+    { "id": 54, "tasks": ["10.3"] },
+    { "id": 55, "tasks": ["10.4"] },
+    { "id": 56, "tasks": ["10.5"] },
+    { "id": 57, "tasks": ["10.6"] },
+    { "id": 58, "tasks": ["10.7"] },
+    { "id": 59, "tasks": ["10.8"] },
+    { "id": 60, "tasks": ["10.9"] },
+    { "id": 61, "tasks": ["11.1"] },
+    { "id": 62, "tasks": ["11.2"] },
+    { "id": 63, "tasks": ["11.3"] },
+    { "id": 64, "tasks": ["11.4"] },
+    { "id": 65, "tasks": ["11.5"] },
+    { "id": 66, "tasks": ["11.6"] },
+    { "id": 67, "tasks": ["11.7"] },
+    { "id": 68, "tasks": ["11.8"] },
+    { "id": 69, "tasks": ["11.9"] },
+    { "id": 70, "tasks": ["11.10"] },
+    { "id": 71, "tasks": ["11.11"] },
+    { "id": 72, "tasks": ["11.12"] },
+    { "id": 73, "tasks": ["11.13"] },
+    { "id": 74, "tasks": ["12.1"] },
+    { "id": 75, "tasks": ["12.2"] },
+    { "id": 76, "tasks": ["12.3"] },
+    { "id": 77, "tasks": ["12.4"] },
+    { "id": 78, "tasks": ["12.5"] },
+    { "id": 79, "tasks": ["13.1"] },
+    { "id": 80, "tasks": ["13.2"] },
+    { "id": 81, "tasks": ["14.1"] },
+    { "id": 82, "tasks": ["15.1"] },
+    { "id": 83, "tasks": ["15.2"] },
+    { "id": 84, "tasks": ["15.3"] },
+    { "id": 85, "tasks": ["15.4"] },
+    { "id": 86, "tasks": ["15.5"] },
+    { "id": 87, "tasks": ["16.1"] },
+    { "id": 88, "tasks": ["17.1"] },
+    { "id": 89, "tasks": ["17.2"] },
+    { "id": 90, "tasks": ["17.3"] },
+    { "id": 91, "tasks": ["17.4"] },
+    { "id": 92, "tasks": ["17.5"] },
+    { "id": 93, "tasks": ["17.6"] },
+    { "id": 94, "tasks": ["17.7"] },
+    { "id": 95, "tasks": ["17.8"] },
+    { "id": 96, "tasks": ["18.1"] },
+    { "id": 97, "tasks": ["19.1"] },
+    { "id": 98, "tasks": ["19.2"] },
+    { "id": 99, "tasks": ["19.3"] },
+    { "id": 100, "tasks": ["19.4"] },
+    { "id": 101, "tasks": ["19.5"] },
+    { "id": 102, "tasks": ["19.6"] },
+    { "id": 103, "tasks": ["19.7"] },
+    { "id": 104, "tasks": ["19.8"] },
+    { "id": 105, "tasks": ["19.9"] },
+    { "id": 106, "tasks": ["19.10"] },
+    { "id": 107, "tasks": ["20.1"] },
+    { "id": 108, "tasks": ["20.2"] },
+    { "id": 109, "tasks": ["20.3"] },
+    { "id": 110, "tasks": ["20.4"] },
+    { "id": 111, "tasks": ["20.5"] },
+    { "id": 112, "tasks": ["21.1"] }
   ]
 }
 ```

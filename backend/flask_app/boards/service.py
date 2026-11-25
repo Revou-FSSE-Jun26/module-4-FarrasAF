@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from flask_app.access.rbac import get_board_role
+from flask_app.columns.service import list_board_columns_service
 from flask_app.common.exceptions import AuthorizationError, NotFoundError, ValidationError
 from flask_app.extensions import db
 from flask_app.models import Board, BoardMembership, Column, TeamMembership, User
@@ -70,7 +71,9 @@ def list_boards_service(payload: dict[str, Any], user: User) -> dict[str, Any]:
 
 def get_board_service(board_id: UUID, user: User) -> dict[str, Any]:
     board = _get_board(board_id)
-    return _board_dict(board, get_board_role(board_id, user.id))
+    result = _board_dict(board, get_board_role(board_id, user.id))
+    result["columns"] = list_board_columns_service(board_id)
+    return result
 
 
 def update_board_service(board_id: UUID, payload: dict[str, Any], user: User) -> dict[str, Any]:

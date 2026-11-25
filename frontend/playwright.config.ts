@@ -12,7 +12,7 @@ const FRONTEND_URL = `http://localhost:${FRONTEND_PORT}`;
 // Dedicated E2E database: never the dev or production database.
 const E2E_DATABASE_URL =
   process.env.E2E_DATABASE_URL ??
-  "postgresql+psycopg://postgres:postgres@localhost:5432/task_management_e2e";
+  "";
 
 const backendDir = path.resolve(__dirname, "..", "backend");
 const venvPython = isWindows

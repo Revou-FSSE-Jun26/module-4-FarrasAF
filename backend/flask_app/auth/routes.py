@@ -2,13 +2,20 @@ from flask import Blueprint, Response, current_app, request
 
 from flask_app.auth.cookies import clear_auth_cookies, set_access_cookie, set_auth_cookies
 from flask_app.auth.decorators import current_user, token_required
-from flask_app.auth.schema import LoginSchema, RegisterSchema
+from flask_app.auth.schema import (
+    ChangePasswordSchema,
+    LoginSchema,
+    RegisterSchema,
+    UpdateProfileSchema,
+)
 from flask_app.auth.service import (
+    change_password_service,
     login_service,
     logout_service,
     me_service,
     refresh_service,
     register_service,
+    update_profile_service,
 )
 from flask_app.common.serialization import json_response, read_json
 from flask_app.common.validation import load_schema
@@ -54,3 +61,20 @@ def logout() -> Response:
 @token_required
 def me() -> Response:
     return json_response(me_service(current_user()))
+
+
+@auth_bp.patch("/api/auth/me")
+@token_required
+def update_profile() -> Response:
+    payload = load_schema(UpdateProfileSchema(), read_json())
+    return json_response(update_profile_service(current_user(), payload))
+
+
+@auth_bp.post("/api/auth/me/password")
+@token_required
+def change_password() -> Response:
+    payload = load_schema(ChangePasswordSchema(), read_json())
+    identity, access, refresh = change_password_service(current_user(), payload)
+    response = json_response(identity)
+    set_auth_cookies(response, access, refresh)
+    return response

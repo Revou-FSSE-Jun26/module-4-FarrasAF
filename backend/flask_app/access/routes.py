@@ -8,6 +8,8 @@ from flask_app.access.service import (
     add_member_service,
     change_member_role_service,
     generate_invitation_service,
+    guest_board_service,
+    guest_comments_service,
     list_invitations_service,
     list_members_service,
     remove_member_service,
@@ -18,6 +20,17 @@ from flask_app.common.serialization import json_response, read_json
 from flask_app.common.validation import load_schema
 
 access_bp = Blueprint("access", __name__)
+guest_bp = Blueprint("guest", __name__)
+
+
+@guest_bp.get("/api/guest/<token>/board")
+def guest_board(token: str) -> Response:
+    return json_response(guest_board_service(token))
+
+
+@guest_bp.get("/api/guest/<token>/cards/<uuid:card_id>/comments")
+def guest_comments(token: str, card_id: UUID) -> Response:
+    return json_response(guest_comments_service(token, card_id))
 
 
 @access_bp.get("/api/boards/<uuid:board_id>/members")
