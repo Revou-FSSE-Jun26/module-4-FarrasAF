@@ -275,3 +275,40 @@ def test_move_route_rejects_guest_non_member_and_anonymous(
     db_session.commit()
     assert client.post(url, json=body).status_code == 200
     assert client.post(url, json={**body, "version": 1}).status_code == 400
+
+
+def test_guest_path_rejects_non_get_card_requests_with_403(
+    db_session: Any, client: Any, make_card: Callable[..., Card]
+) -> None:
+    card = make_card()
+    db_session.commit()
+    for method in ("post", "patch", "delete"):
+        response = getattr(client, method)(f"/api/guest/some-token/cards/{card.id}", json={})
+        assert response.status_code == 403
+        assert response.get_json()["error"]["code"] == "authorization_error"
+
+
+def test_card_routes_reject_missing_cookie_and_non_member(
+    db_session: Any,
+    client: Any,
+    make_user: Callable[..., User],
+    make_column: Callable[..., Column],
+    make_card: Callable[..., Card],
+) -> None:
+    column = make_column()
+    card = make_card(column=column)
+    outsider = make_user()
+    db_session.commit()
+    for method, url in (
+        ("post", f"/api/columns/{column.id}/cards"),
+        ("get", f"/api/cards/{card.id}"),
+        ("patch", f"/api/cards/{card.id}"),
+        ("delete", f"/api/cards/{card.id}"),
+    ):
+        anonymous = getattr(client, method)(url, json={"title": "T", "version": 1})
+        assert anonymous.status_code == 401
+        assert anonymous.get_json()["error"]["code"] == "authentication_error"
+    client.set_cookie("access_token", create_access_token(outsider.id))
+    forbidden = client.get(f"/api/cards/{card.id}")
+    assert forbidden.status_code == 403
+    assert forbidden.get_json()["error"]["code"] == "authorization_error"

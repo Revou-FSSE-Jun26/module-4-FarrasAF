@@ -7,12 +7,15 @@ const isWindows = process.platform === "win32";
 const BACKEND_PORT = 5000;
 const FRONTEND_PORT = 3000;
 const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
-const FRONTEND_URL = `http://localhost:${FRONTEND_PORT}`;
+// Set E2E_BASE_URL to run against an already deployed frontend (for example the
+// Vercel URL). No local servers are started in that case.
+const REMOTE_URL = process.env.E2E_BASE_URL?.replace(/\/+$/, "");
+const FRONTEND_URL = REMOTE_URL ?? `http://localhost:${FRONTEND_PORT}`;
 
 // Dedicated E2E database: never the dev or production database.
 const E2E_DATABASE_URL =
   process.env.E2E_DATABASE_URL ??
-  "postgresql+psycopg://postgres:root@localhost:5432/taskmgmt_e2e";
+  "postgresql+psycopg://taskapp:your_password@localhost:5432/taskmgmt_e2e";
 
 const backendDir = path.resolve(__dirname, "..", "backend");
 const venvPython = isWindows
@@ -21,17 +24,23 @@ const venvPython = isWindows
 
 export default defineConfig({
   testDir: "./e2e",
-  globalSetup: "./e2e/global-setup.ts",
+  // The route warm-up is only needed for `next dev`.
+  globalSetup: REMOTE_URL ? undefined : "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: isCI,
-  retries: isCI ? 2 : 0,
-  reporter: "list",
+  retries: isCI || REMOTE_URL ? 2 : 0,
+  // The free-tier backend may be asleep; allow slower first requests remotely.
+  timeout: REMOTE_URL ? 60_000 : 30_000,
+  workers: REMOTE_URL ? 2 : undefined,
+  reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: FRONTEND_URL,
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: [
+  webServer: REMOTE_URL
+    ? undefined
+    : [
     {
       command: `"${venvPython}" -m flask --app flask_app.app run --port ${BACKEND_PORT}`,
       cwd: backendDir,

@@ -1,0 +1,123 @@
+# Project Brief — Task Management Application
+
+## 1. Overview
+
+A collaborative team task management web application inspired by Trello. Teams can organize their work using boards consisting of columns and cards. Members can create tasks, assign responsibilities, move cards between columns, communicate through comments, and track team activity.
+
+The goal is to provide teams with clear visibility into task progress, task ownership, and team activity in one shared workspace.
+
+## 2. User Roles
+
+### Guest
+- View boards shared through an active invitation link.
+- View columns, cards, and comments.
+- Cannot create, edit, delete, or move cards.
+- Cannot create comments or interact with board members.
+
+### Member
+- View boards they belong to.
+- Create, edit, and delete cards.
+- Create comments and reply to existing comments.
+- Move cards between columns using drag-and-drop.
+- Search cards across accessible boards.
+- Receive notifications when mentioned in comments.
+- View board analytics.
+- Cannot manage board settings, columns, or members.
+
+### Admin
+- All Member permissions.
+- Create, edit, reorder, and delete columns.
+- Manage board members and their roles.
+- Manage board settings and access permissions.
+- Archive and delete boards.
+- View board analytics.
+
+## 3. Core Features
+
+### 3.1 Boards
+- Create and manage team boards.
+- Each board belongs to a team.
+- Manage board visibility and sharing permissions.
+
+### 3.2 Columns
+- Create, edit, delete, and reorder columns.
+- Each column contains an ordered list of cards.
+- Default columns: To Do, Doing, Done.
+
+### 3.3 Cards
+- Create, edit, and delete task cards.
+- Each card contains:
+  - Title
+  - Description
+  - Assignee
+  - Due date
+  - Created by
+  - Created timestamp
+  - Updated timestamp
+- Cards can be moved between columns.
+
+### 3.4 Comments
+- Members can comment on cards.
+- Support threaded replies.
+- Users can edit and delete their own comments.
+
+### 3.5 Drag-and-Drop
+- Move cards between columns.
+- Reorder cards within a column.
+- Persist card positions after updates.
+
+### 3.6 Notifications
+- Notify members when they are mentioned in a comment.
+- Store notifications in the database.
+- Support read/unread notification status.
+- Use HTTP polling to retrieve new notifications.
+
+### 3.7 Search
+- Search cards across boards accessible to the current member.
+- Search by card title keyword.
+- Display the board and column associated with each result.
+
+### 3.8 Activity Log
+- Record important board activities.
+- Track card creation, updates, movement, and comments.
+- Display activity history with timestamps and user information.
+
+### 3.9 Analytics
+- Display total task count.
+- Display task distribution by column.
+- Calculate task completion rate.
+- Display board activity over time.
+
+## 4. Board Settings
+
+Only Admins can access and modify board settings.
+
+- **General:** Update board name, description, and visibility.
+- **Members & Permissions:** Invite members, remove members, and manage roles.
+- **Access & Sharing:** Generate, revoke, and manage invitation links.
+- **Board Management:** Archive, restore, or permanently delete boards.
+
+## 5. Tech Stack
+
+- Frontend: Next.js + React + TypeScript + Tailwind CSS
+- Backend: Flask + Python
+- Database: PostgreSQL with SQLAlchemy
+
+## 6. Non-functional Requirements
+
+1. Performance: The system shall return API responses in under 300 ms for 95% of requests under normal operating conditions, excluding long-running operations.
+2. Availability: The system shall maintain 99.5% monthly availability.
+3. Security: The system shall enforce role-based access control (RBAC).
+4. Data Integrity: The system shall persist card positions and column assignments after drag-and-drop interactions.
+5. Concurrency: The system shall prevent silent overwriting of simultaneous updates.
+6. Scalability: The system shall support multiple teams, boards, and concurrent users.
+7. Usability: The application shall provide a responsive interface across desktop, tablet, and mobile devices.
+
+## 7. Out of Scope (V1)
+
+- File attachments.
+- Email notifications and digests.
+- Third-party integrations.
+- Advanced analytics and reporting.
+- Burndown charts.
+- Real-time collaboration using WebSockets.

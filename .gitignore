@@ -9,9 +9,12 @@ __pycache__/
 node_modules/
 .next/
 .kiroignore
-task-management-project-brief.txt
 task-management-app.code-workspace
 .env.local
 .env.production
 test-results/
 playwright-report/
+
+# Playwright output
+frontend/playwright-report/
+frontend/test-results/

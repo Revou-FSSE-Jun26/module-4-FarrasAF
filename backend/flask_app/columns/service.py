@@ -25,7 +25,9 @@ def list_board_columns_service(board_id: UUID) -> list[dict[str, Any]]:
 
     columns = list(
         db.session.scalars(
-            select(Column).where(Column.board_id == board_id).order_by(Column.order_index, Column.id)
+            select(Column)
+            .where(Column.board_id == board_id)
+            .order_by(Column.order_index, Column.id)
         )
     )
     cards = db.session.scalars(

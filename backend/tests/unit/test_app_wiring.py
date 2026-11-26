@@ -2,14 +2,18 @@ import logging
 from typing import Any
 
 import pytest
+from flask import Flask
 
 from flask_app.models import InvitationLink, User
 from scripts.seed import INVITATION_TOKEN, seed_data
 
 
 def test_request_log_uses_route_template_only(
-    client: Any, caplog: pytest.LogCaptureFixture
+    app: Flask, client: Any, caplog: pytest.LogCaptureFixture
 ) -> None:
+    # The Alembic upgrade test runs logging.config.fileConfig, which disables
+    # existing loggers (including app.logger) for the rest of the session.
+    app.logger.disabled = False
     secret = "SECRETTOKEN123"
     with caplog.at_level(logging.INFO):
         client.get(f"/api/guest/{secret}/board?q=hidden", headers={"Cookie": "access_token=abc"})
