@@ -309,7 +309,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - `tests/unit/test_columns.py`: append index, rename, invalid name (R2.6), out-of-range reorder (R2.7), non-Admin rejection (R2.8), activity entries recorded
     - _Requirements: 2.1, 2.2, 2.6, 2.7, 2.8, 8.8, 8.9_
 
-- [ ] 10. Card_Service
+- [x] 10. Card_Service
   - [x] 10.1 Implement Card create, read, edit, and delete
     - `service.py`: create (append at end, `version = 1`, `created_at == updated_at`), get (includes `version`), PATCH (atomic multi-field validation first; Assignee must be a current Board Member; conditional `UPDATE ... WHERE version = :expected`; missing `version` raises `ConflictError`; sets `updated_at` explicitly and increments `version`), delete (no `version` required, reindex column); record `card_created` / `card_updated` / `card_deleted` in the same transaction
     - `schema.py` (`version` never `required`, strict int when present), `routes.py` per the Card_Service table; register Blueprint in `app.py`
@@ -340,21 +340,21 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - **Property 3: Card position round-trip persistence**
     - **Validates: Requirements 4.3**
 
-  - [ ] 10.7 Write property test for invalid moves
+  - [x] 10.7 Write property test for invalid moves
     - File: `tests/properties/test_property_04_invalid_move_unchanged.py`
     - **Property 4: Out-of-range or cross-board moves leave position unchanged**
     - **Validates: Requirements 2.7, 4.4, 4.5**
 
-  - [ ] 10.8 Write property test for move timestamps and version
+  - [x] 10.8 Write property test for move timestamps and version
     - File: `tests/properties/test_property_35_move_updated_at_version.py`
     - **Property 35: Card move changes only the moved Card's updated_at and never its version**
     - **Validates: Requirements 4.7, 13.6**
 
-  - [ ] 10.9 Write unit tests for the cards service
+  - [x] 10.9 Write unit tests for the cards service
     - `tests/unit/test_cards.py`: append-to-end (see `card-conventions.md` rule 5), not-found (R3.9), Guest rejection with three cases (a non-GET request to `/api/guest/<token>/...` returns 403 `AuthorizationError`; an authenticated User with no role on the Board returns 403 `AuthorizationError`; a request without cookies to an authenticated route returns 401 `AuthenticationError`, since Guests are anonymous) (R3.6, R4.6), `version` returned on read and set to 1 on create, activity entries recorded
     - _Requirements: 3.1, 3.2, 3.6, 3.9, 4.6, 13.1, 13.4_
 
-- [ ] 11. Notification_Service, Comment_Service, and Guest routes
+- [x] 11. Notification_Service, Comment_Service, and Guest routes
   - [x] 11.1 Implement the `notifications/` module
     - `service.py`: `create_mention_notifications()` helper (adds only; one unread Notification per distinct mentioned current Board Member), cursor-paginated list (50 per page, `created_at DESC, id DESC`, `unread_only` filter, `{ items, nextCursor }`), mark as read (recipient only, else `AuthorizationError`)
     - `schema.py` (`cursor`, `unread_only`), `routes.py` with `@token_required`; malformed cursor gives `ValidationError` and no items; register Blueprint in `app.py`
@@ -375,26 +375,26 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - **Property 25: Invitation link generation, isolation, and anonymous Guest access control**
     - **Validates: Requirements 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.8**
 
-  - [ ] 11.5 Write unit tests for Guest routes
+  - [x] 11.5 Write unit tests for Guest routes
     - `tests/unit/test_guest.py`: unknown token (R11.6), Guest rejection with three cases (a non-GET request to `/api/guest/<token>/...` returns 403 `AuthorizationError` (R11.4); an authenticated User with no role on the Board returns 403 `AuthorizationError`; a request without cookies to an authenticated route returns 401 `AuthenticationError`, since Guests are anonymous), Guest payload has no emails, `version`, or Activity (R11.3), archived-Board token rejected (R11.8), Card outside the token's Board returns not-found
     - _Requirements: 11.3, 11.4, 11.6, 11.8_
 
-  - [ ] 11.6 Write property test for mention notifications
+  - [x] 11.6 Write property test for mention notifications
     - File: `tests/properties/test_property_13_mention_notifications.py`
     - **Property 13: Mentions create exactly one unread notification per distinct board member**
     - **Validates: Requirements 6.1, 6.8**
 
-  - [ ] 11.7 Write property test for Notification pagination
+  - [x] 11.7 Write property test for Notification pagination
     - File: `tests/properties/test_property_14_notification_pagination.py`
     - **Property 14: Notification cursor pagination visits each notification exactly once in order**
     - **Validates: Requirements 6.2, 6.3, 6.4, 6.6, 6.7**
 
-  - [ ] 11.8 Write property test for reply threading
+  - [x] 11.8 Write property test for reply threading
     - File: `tests/properties/test_property_12_reply_threading.py`
     - **Property 12: Reply threading validity**
     - **Validates: Requirements 5.2, 5.8**
 
-  - [ ] 11.9 Write property test for Comment subtree deletion
+  - [x] 11.9 Write property test for Comment subtree deletion
     - File: `tests/properties/test_property_11_comment_subtree_delete.py`
     - **Property 11: Comment deletion removes the entire reply subtree**
     - **Validates: Requirements 5.4**
@@ -404,12 +404,12 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - **Property 39: Only the author can edit or delete a Comment**
     - **Validates: Requirements 5.5**
 
-  - [ ] 11.11 Write property test for optimistic concurrency
+  - [x] 11.11 Write property test for optimistic concurrency
     - File: `tests/properties/test_property_20_optimistic_concurrency.py`
     - **Property 20: Optimistic concurrency prevents silent overwrites**
     - **Validates: Requirements 13.2, 13.3, 13.5, 14.5**
 
-  - [ ] 11.12 Write property test for input validation
+  - [x] 11.12 Write property test for input validation
     - File: `tests/properties/test_property_07_input_validation.py`
     - **Property 7: Input validation rejects invalid values and leaves state unchanged**
     - **Validates: Requirements 1.8, 2.6, 3.7, 5.7**
@@ -418,7 +418,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - `tests/unit/test_notifications.py` and `tests/unit/test_comments.py`: mark-as-read (R6.5), marking another user's Notification (R6.9), malformed cursor (R6.10), mention parser examples (duplicates, invalid ids, non-members), Guest rejection (R5.6) with three cases (a non-GET request to `/api/guest/<token>/...` returns 403 `AuthorizationError`; an authenticated User with no role on the Board returns 403 `AuthorizationError`; a request without cookies to an authenticated route returns 401 `AuthenticationError`, since Guests are anonymous)
     - _Requirements: 5.6, 6.5, 6.9, 6.10_
 
-- [ ] 12. Search_Service and Analytics_Service
+- [x] 12. Search_Service and Analytics_Service
   - [x] 12.1 Implement the `search/` module
     - `service.py`: keyword 1-100 non-blank chars, escape `%`, `_`, `\` before a case-insensitive `ILIKE`, restrict to accessible Boards, include Board and Column per result, order `updated_at DESC, id DESC`, cap 100, eager-load to avoid N+1
     - `schema.py` (`q`), `routes.py` `GET /api/search/cards` with `@token_required`; register Blueprint in `app.py`
@@ -429,28 +429,28 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - `routes.py` `GET /api/boards/{boardId}/analytics` with `@require_role('member')`; no `schema.py` (no body or query); register Blueprint in `app.py`
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
 
-  - [ ] 12.3 Write property test for search
+  - [x] 12.3 Write property test for search
     - File: `tests/properties/test_property_16_search.py`
     - **Property 16: Search result soundness, completeness, content, ordering, and cap**
     - **Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.6**
 
-  - [ ] 12.4 Write property test for analytics
+  - [x] 12.4 Write property test for analytics
     - File: `tests/properties/test_property_19_analytics.py`
     - **Property 19: Analytics counts and completion rate are consistent and bounded**
     - **Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5, 9.6**
 
-  - [ ] 12.5 Write property test for Activity recording
+  - [x] 12.5 Write property test for Activity recording
     - File: `tests/properties/test_property_17_activity_recording.py`
     - **Property 17: Activity entries are recorded faithfully for each tracked event**
     - **Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.13**
 
-- [ ] 13. Backend integration and seed data
+- [x] 13. Backend integration and seed data
   - [x] 13.1 Finalize app wiring, logging, and the seed script
     - Verify every Blueprint is registered in `app.py`; add request logging by route template only (`request.url_rule.rule` or `unmatched`, method, status, user id; never raw path, query, cookies, bodies, tokens, or Comment text)
     - `scripts/seed.py` (run with `python -m scripts.seed`): idempotent demo and E2E data (users, a Team with a Team_Admin and a regular member, a Board with default Columns and Cards, a Comment thread, an active Invitation_Link)
     - _Requirements: 1.2, 11.1, 12.6, 14.2_
 
-  - [ ] 13.2 Write backend integration tests
+  - [x] 13.2 Write backend integration tests
     - `tests/integration/test_api_flows.py`: end-to-end API flows through the authentication and RBAC gates (401 before 403, Guest read-only, role change on the next request), concurrent Card edits with no lost update (R14.5), and the lockout flow
     - _Requirements: 12.6, 14.5, 15.4, 15.5_
 
@@ -534,7 +534,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Frontend (from `frontend/`): `npm run lint`, `npm run build`, `npx playwright test` (skip while no E2E specs exist)
     - Fix every failure, ask the user if questions arise, then commit with the checkpoint number in the message
 
-- [ ] 19. Playwright end-to-end tests
+- [x] 19. Playwright end-to-end tests
   - [x] 19.1 Create E2E fixtures and helpers
     - `frontend/e2e/fixtures.ts`: helpers that create unique users, Teams, Boards, Cards, and Invitation_Links through the API (and the seed script for baseline data) so every test sets up its own data against the dedicated E2E test database configured in `playwright.config.ts` (task 1.6); accessible locators first, `data-testid` only for draggable Cards, no `waitForTimeout`
     - _Requirements: 14.5_
@@ -571,17 +571,17 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - `frontend/e2e/responsive.spec.ts`: at >= 1024px the Board has no horizontal page scroll; below 1024px controls stay visible and non-overlapping
     - _Requirements: 14.3, 14.4_
 
-  - [ ] 19.10 Write Profile E2E tests
+  - [x] 19.10 Write Profile E2E tests
     - `frontend/e2e/profile.spec.ts`: change the display name and see it in the app shell and on the Team members page, invalid (blank) name shows an inline error, change the password and stay logged in, log out and log in with the new password, the old password is rejected with the generic login error, a wrong current password shows the inline error, and `/profile` redirects to `/login` when logged out; every test creates its own user
     - _Requirements: 18.1, 18.2, 18.3, 18.5, 18.6, 18.7, 18.10, 18.11_
 
 - [ ] 20. Documentation, production seed, and smoke test
-  - [ ] 20.1 Write the README
+  - [x] 20.1 Write the README
     - Root `README.md` (extend the "Deployment notes" created in task 4.9): setup (backend venv and `pip install -r requirements.txt`, frontend `npm install`, `.env` from `.env.example`, local PostgreSQL), run (backend and frontend commands), test (`pytest`, `ruff`, `mypy`, `npm run lint`, `npm run build`, `npx playwright test` with the dedicated E2E test database), deployment (Supabase, Render, Vercel, migrations and seeding run manually, open `/api/health` before demos), and the spec-driven workflow (requirements, design, tasks, CHANGELOG, steering)
     - Known limitations: free-tier backend sleep after idle (the first request and a proxied request may be slow or time out), Supabase Free project pause after a week of inactivity (restore it before demos), writes to archived Boards are not blocked in V1 (only Guest access is rejected), p95 < 300 ms (R14.1) and 99.5% availability (R14.2) are design targets rather than measured guarantees, and any dependency that failed to install in task 1.1
     - _Requirements: 14.1, 14.2_
 
-  - [ ] 20.2 Seed the production database
+  - [x] 20.2 Seed the production database
     - From a developer machine, with the production `DATABASE_URL` set in the shell (never committed), run `python -m scripts.seed` from `backend/`; never run it at request time and never run E2E tests against production
     - Confirm the seeded demo data (users, Team, Board, Cards, Comment thread, Invitation_Link) is visible through the Vercel domain and record the demo credentials location (not the secrets) in the README
     - _Requirements: 1.2, 11.1_
