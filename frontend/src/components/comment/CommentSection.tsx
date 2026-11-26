@@ -17,33 +17,35 @@ export default function CommentSection({
   const comments = useComments(cardId);
 
   return (
-    <section aria-label="Comments" className="mt-4 flex flex-col gap-3">
-      <h3 className="text-sm font-semibold text-gray-900">Comments</h3>
+    <section aria-label="Comments" className="flex flex-col gap-3">
+      <h3 className="text-sm font-semibold tracking-tight text-slate-900">
+        Comments
+      </h3>
       {comments.notice ? (
         <p
           role="status"
-          className="rounded-md bg-yellow-100 p-2 text-sm text-yellow-900"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-900"
         >
           {comments.notice}
         </p>
       ) : null}
       {comments.error ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-xs font-medium text-rose-600">
           {comments.error}
         </p>
       ) : null}
       {comments.isLoading ? (
-        <p className="text-sm text-gray-600">Loading comments…</p>
+        <p className="text-sm text-slate-500">Loading comments…</p>
       ) : comments.loadError ? (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-xs font-medium text-rose-600">
           {comments.loadError}
         </p>
       ) : (
         <>
           {comments.tree.length === 0 ? (
-            <p className="text-sm text-gray-600">No comments yet.</p>
+            <p className="text-sm text-slate-500">No comments yet.</p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col gap-2.5">
               {comments.tree.map((node) => (
                 <CommentItem
                   key={node.comment.id}

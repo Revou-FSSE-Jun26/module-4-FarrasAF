@@ -17,9 +17,18 @@ export default function BoardsView() {
   const { teams } = useTeams();
 
   return (
-    <main className="flex flex-col gap-4 p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Boards</h1>
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 lg:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+            Boards
+          </h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            {isArchived
+              ? "Archived boards across your teams"
+              : "Select a board or create a new one"}
+          </p>
+        </div>
         <BaseButton
           variant="secondary"
           aria-pressed={isArchived}
@@ -29,7 +38,9 @@ export default function BoardsView() {
         </BaseButton>
       </div>
       {isArchived ? null : (
-        <CreateBoardForm teams={teams} onBoardCreate={createBoard} />
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+          <CreateBoardForm teams={teams} onBoardCreate={createBoard} />
+        </div>
       )}
       {isLoading ? (
         <BaseLoadingState />
@@ -44,25 +55,25 @@ export default function BoardsView() {
           }
         />
       ) : (
-        <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
+        <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-2xs">
           {boards.map((board) => (
             <li
               key={board.id}
-              className="flex items-center justify-between gap-2 px-4 py-3 text-sm"
+              className="flex items-center justify-between gap-3 px-4 py-3.5 text-sm transition-colors hover:bg-slate-50/80"
             >
               <Link
                 href={`/boards/${board.id}`}
-                className="font-medium text-gray-900 hover:underline"
+                className="font-medium text-slate-900 hover:text-indigo-700"
               >
                 {board.name}
               </Link>
-              <span className="flex items-center gap-3 text-gray-600">
-                <span>
+              <span className="flex items-center gap-3 text-slate-500">
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
                   {board.currentUserRole === "admin" ? "Admin" : "Member"}
                 </span>
                 <Link
                   href={`/boards/${board.id}/settings`}
-                  className="text-blue-600 hover:underline"
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:underline"
                 >
                   Settings
                 </Link>

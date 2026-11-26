@@ -35,43 +35,57 @@ export default function CommentItem({
 
   return (
     <li className="flex flex-col gap-2">
-      <div className="rounded-md border border-gray-200 p-2">
-        <p className="text-xs text-gray-600">
-          {author ? author.displayName : "Unknown user"} ·{" "}
-          {new Date(comment.createdAt).toLocaleString()}
+      <div className="rounded-lg border border-slate-200/80 bg-slate-50/70 p-3">
+        <p className="text-xs text-slate-500">
+          <span className="font-medium text-slate-700">
+            {author ? author.displayName : "Unknown user"}
+          </span>{" "}
+          · {new Date(comment.createdAt).toLocaleString()}
           {comment.editedAt ? " (edited)" : ""}
         </p>
         {mode === "edit" ? (
-          <CommentComposer
-            label="Edit comment"
-            submitLabel="Save"
-            initialBody={comment.body}
-            members={members}
-            isBusy={isBusy}
-            onSubmitEvent={async (body) => {
-              const isOk = await onEditEvent(comment, body);
-              if (isOk) setMode("view");
-              return isOk;
-            }}
-            onCancelEvent={() => setMode("view")}
-          />
+          <div className="mt-2">
+            <CommentComposer
+              label="Edit comment"
+              submitLabel="Save"
+              initialBody={comment.body}
+              members={members}
+              isBusy={isBusy}
+              onSubmitEvent={async (body) => {
+                const isOk = await onEditEvent(comment, body);
+                if (isOk) setMode("view");
+                return isOk;
+              }}
+              onCancelEvent={() => setMode("view")}
+            />
+          </div>
         ) : (
-          <p className="text-sm break-words whitespace-pre-wrap text-gray-900">
+          <p className="mt-1 text-sm break-words whitespace-pre-wrap text-slate-800">
             {renderMentions(comment.body, members)}
           </p>
         )}
         {mode === "view" ? (
-          <div className="mt-1 flex gap-2">
-            <BaseButton variant="secondary" onClick={() => setMode("reply")}>
+          <div className="mt-2 flex gap-1.5">
+            <BaseButton
+              variant="ghost"
+              size="sm"
+              onClick={() => setMode("reply")}
+            >
               Reply
             </BaseButton>
             {isOwn ? (
               <>
-                <BaseButton variant="secondary" onClick={() => setMode("edit")}>
+                <BaseButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMode("edit")}
+                >
                   Edit
                 </BaseButton>
                 <BaseButton
-                  variant="danger"
+                  variant="ghost"
+                  size="sm"
+                  className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                   onClick={() => setMode("confirmDelete")}
                 >
                   Delete
@@ -81,16 +95,21 @@ export default function CommentItem({
           </div>
         ) : null}
         {mode === "confirmDelete" ? (
-          <div className="mt-2 flex flex-col gap-2">
-            <p className="text-sm text-gray-700">
+          <div className="mt-2.5 flex flex-col gap-2 rounded-lg border border-rose-200 bg-rose-50/70 p-2.5">
+            <p className="text-xs font-medium text-rose-900">
               Delete this comment and its replies?
             </p>
             <div className="flex gap-2">
-              <BaseButton variant="secondary" onClick={() => setMode("view")}>
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                onClick={() => setMode("view")}
+              >
                 Cancel
               </BaseButton>
               <BaseButton
                 variant="danger"
+                size="sm"
                 isLoading={isBusy}
                 onClick={() => void onDeleteEvent(comment.id)}
               >
@@ -100,7 +119,7 @@ export default function CommentItem({
           </div>
         ) : null}
         {mode === "reply" ? (
-          <div className="mt-2">
+          <div className="mt-2.5">
             <CommentComposer
               label="Reply"
               submitLabel="Post reply"
@@ -117,7 +136,7 @@ export default function CommentItem({
         ) : null}
       </div>
       {replies.length > 0 ? (
-        <ul className="ml-4 flex flex-col gap-2 border-l border-gray-200 pl-2">
+        <ul className="ml-4 flex flex-col gap-2 border-l-2 border-slate-200/80 pl-3">
           {replies.map((reply) => (
             <CommentItem
               key={reply.comment.id}

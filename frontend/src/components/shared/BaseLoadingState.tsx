@@ -9,11 +9,11 @@ export default function BaseLoadingState({
     <div
       role="status"
       aria-live="polite"
-      className="flex items-center justify-center gap-2 p-6 text-sm text-gray-600"
+      className="flex items-center justify-center gap-2.5 p-8 text-sm text-slate-500"
     >
       <span
         aria-hidden="true"
-        className="size-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"
+        className="size-4 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600"
       />
       <span>{label}</span>
     </div>

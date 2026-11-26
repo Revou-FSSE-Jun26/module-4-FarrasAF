@@ -14,25 +14,25 @@ export default function NotificationItem({
   const isUnread = notification.status === 'unread';
   return (
     <li
-      className={`flex items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 ${
-        isUnread ? 'bg-blue-50' : ''
+      className={`flex items-center justify-between gap-3 border-b border-slate-100 px-3.5 py-2.5 transition-colors last:border-b-0 ${
+        isUnread ? 'bg-indigo-50/60' : 'hover:bg-slate-50'
       }`}
     >
       <div className="min-w-0 text-sm">
         <Link
           href={`/boards/${encodeURIComponent(notification.boardId)}`}
-          className="font-medium text-blue-700 hover:underline"
+          className="font-medium text-indigo-700 hover:underline"
         >
           You were mentioned in a comment
         </Link>
-        <p className="text-xs text-gray-500">
+        <p className="mt-0.5 text-xs text-slate-500">
           {new Date(notification.createdAt).toLocaleString()}
         </p>
       </div>
       {isUnread ? (
         <BaseButton
           variant="secondary"
-          className="min-h-8 px-2 py-1 text-xs"
+          size="sm"
           onClick={() => onMarkRead(notification.id)}
         >
           Mark as read

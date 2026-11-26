@@ -10,7 +10,7 @@ export default function BaseEmptyState({
   action,
 }: BaseEmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 p-6 text-center text-sm text-gray-600">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-white/60 p-8 text-center text-sm text-slate-500">
       <p>{message}</p>
       {action}
     </div>

@@ -43,23 +43,24 @@ export default function CommentComposer({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-2">
-      <label htmlFor={fieldId} className="text-sm font-medium text-gray-900">
+      <label htmlFor={fieldId} className="text-sm font-medium text-slate-700">
         {label}
       </label>
       <textarea
         id={fieldId}
         rows={3}
+        placeholder="Write a comment..."
         value={body}
         maxLength={5000}
         onChange={(e) => setBody(e.target.value)}
-        className="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-2xs transition-colors hover:border-slate-300 focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/25"
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <select
           aria-label="Mention a member"
           value=""
           onChange={(e) => handleMention(e.target.value)}
-          className="min-h-10 rounded-md border border-gray-300 px-2 text-sm text-gray-900"
+          className="min-h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 shadow-2xs hover:border-slate-300 focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/25"
         >
           <option value="">Mention…</option>
           {members.map((member) => (
@@ -70,11 +71,15 @@ export default function CommentComposer({
         </select>
         <div className="flex gap-2">
           {onCancelEvent ? (
-            <BaseButton variant="secondary" onClick={onCancelEvent}>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              onClick={onCancelEvent}
+            >
               Cancel
             </BaseButton>
           ) : null}
-          <BaseButton type="submit" isLoading={isBusy}>
+          <BaseButton type="submit" size="sm" isLoading={isBusy}>
             {submitLabel}
           </BaseButton>
         </div>

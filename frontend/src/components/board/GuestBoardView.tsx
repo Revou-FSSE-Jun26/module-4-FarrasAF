@@ -69,26 +69,44 @@ function GuestBoardColumns({
         <section
           key={column.id}
           aria-label={column.name}
-          className="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-3 lg:min-w-0 lg:flex-1"
+          className="flex w-full flex-col gap-3 rounded-xl border border-slate-200/70 bg-slate-100/80 p-3 lg:min-w-0 lg:flex-1"
         >
-          <h2 className="text-sm font-semibold text-gray-900">{column.name}</h2>
+          <div className="flex items-center justify-between gap-2 px-1">
+            <h2 className="text-[13px] font-semibold tracking-tight text-slate-800">
+              {column.name}
+            </h2>
+            <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[11px] font-medium text-slate-600 tabular-nums">
+              {column.cards.length}
+            </span>
+          </div>
           {column.cards.length === 0 ? (
-            <p className="text-sm text-gray-600">No cards yet</p>
+            <p className="rounded-lg border border-dashed border-slate-200/90 px-3 py-4 text-center text-xs text-slate-400">
+              No cards yet
+            </p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="kanban-scroll flex flex-col gap-2 lg:max-h-[calc(100vh-14rem)] lg:overflow-y-auto lg:pr-0.5">
               {column.cards.map((card) => (
                 <li key={card.id}>
                   <button
                     type="button"
                     onClick={() => onCardOpenEvent(card.id)}
-                    className="w-full rounded-md border border-gray-200 bg-white p-3 text-left text-sm text-gray-900 shadow-sm hover:bg-gray-50"
+                    className="w-full rounded-lg border border-slate-200/90 bg-white p-3 text-left text-sm text-slate-900 shadow-2xs transition duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm"
                   >
-                    <span className="block font-medium break-words">
+                    <span className="block text-[13.5px] leading-snug font-medium break-words">
                       {card.title}
                     </span>
-                    {card.dueDate ? (
-                      <span className="mt-1 block text-xs text-gray-600">
-                        Due {card.dueDate}
+                    {card.dueDate || card.description.trim() || card.assignee ? (
+                      <span className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                        {card.dueDate ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600 tabular-nums">
+                            Due {card.dueDate}
+                          </span>
+                        ) : null}
+                        {card.assignee ? (
+                          <span className="inline-flex items-center rounded-md bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-700">
+                            {card.assignee.displayName}
+                          </span>
+                        ) : null}
                       </span>
                     ) : null}
                   </button>

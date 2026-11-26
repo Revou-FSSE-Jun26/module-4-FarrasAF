@@ -16,7 +16,7 @@ interface CardDetailModalProps {
 }
 
 const FIELD_CLASSES =
-  "min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
+  "min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-2xs transition-colors hover:border-slate-300 focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/25";
 
 export default function CardDetailModal({
   boardId,
@@ -33,11 +33,11 @@ export default function CardDetailModal({
 
   return (
     <BaseModal isOpen title="Card details" onClose={onClose}>
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         {detail.notice ? (
           <p
             role="status"
-            className="rounded-md bg-yellow-100 p-2 text-sm text-yellow-900"
+            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
           >
             {detail.notice}
           </p>
@@ -51,16 +51,17 @@ export default function CardDetailModal({
           onChange={(e) => detail.setTitle(e.target.value)}
         />
 
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <label
             htmlFor="card-description"
-            className="text-sm font-medium text-gray-900"
+            className="text-sm font-medium text-slate-700"
           >
             Description
           </label>
           <textarea
             id="card-description"
-            rows={5}
+            rows={4}
+            placeholder="Add a more detailed description..."
             value={detail.description}
             maxLength={5000}
             aria-invalid={detail.descriptionError ? true : undefined}
@@ -68,16 +69,16 @@ export default function CardDetailModal({
             className={FIELD_CLASSES}
           />
           {detail.descriptionError ? (
-            <p role="alert" className="text-sm text-red-600">
+            <p role="alert" className="text-xs font-medium text-rose-600">
               {detail.descriptionError}
             </p>
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <label
             htmlFor="card-assignee"
-            className="text-sm font-medium text-gray-900"
+            className="text-sm font-medium text-slate-700"
           >
             Assignee
           </label>
@@ -104,19 +105,21 @@ export default function CardDetailModal({
         />
 
         {detail.isConfirmingDelete ? (
-          <div className="flex flex-col gap-2 rounded-md border border-red-200 p-3">
-            <p className="text-sm text-gray-700">
+          <div className="flex flex-col gap-2.5 rounded-lg border border-rose-200 bg-rose-50/70 p-3">
+            <p className="text-sm font-medium text-rose-900">
               Delete this Card? This cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <BaseButton
                 variant="secondary"
+                size="sm"
                 onClick={() => detail.setIsConfirmingDelete(false)}
               >
                 Cancel
               </BaseButton>
               <BaseButton
                 variant="danger"
+                size="sm"
                 isLoading={detail.isDeleting}
                 onClick={() => void detail.remove()}
               >
@@ -125,7 +128,7 @@ export default function CardDetailModal({
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap justify-between gap-2">
+          <div className="flex flex-wrap justify-between gap-2 border-t border-slate-100 pt-3">
             <BaseButton
               variant="danger"
               onClick={() => detail.setIsConfirmingDelete(true)}
@@ -143,7 +146,9 @@ export default function CardDetailModal({
           </div>
         )}
       </form>
-      <CommentSection cardId={card.id} members={detail.members} />
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <CommentSection cardId={card.id} members={detail.members} />
+      </div>
     </BaseModal>
   );
 }

@@ -12,7 +12,7 @@ export default function BaseErrorState({
   return (
     <div
       role="alert"
-      className="flex flex-col items-center justify-center gap-3 p-6 text-center text-sm text-red-600"
+      className="flex flex-col items-center justify-center gap-3 rounded-xl border border-rose-200 bg-rose-50/60 p-6 text-center text-sm text-rose-700"
     >
       <p>{message}</p>
       {onRetry ? (
