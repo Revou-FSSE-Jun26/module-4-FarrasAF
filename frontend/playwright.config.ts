@@ -12,7 +12,7 @@ const FRONTEND_URL = `http://localhost:${FRONTEND_PORT}`;
 // Dedicated E2E database: never the dev or production database.
 const E2E_DATABASE_URL =
   process.env.E2E_DATABASE_URL ??
-  "";
+  "postgresql+psycopg://postgres:root@localhost:5432/taskmgmt_e2e";
 
 const backendDir = path.resolve(__dirname, "..", "backend");
 const venvPython = isWindows
@@ -21,6 +21,7 @@ const venvPython = isWindows
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
