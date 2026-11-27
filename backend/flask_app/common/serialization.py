@@ -1,6 +1,7 @@
 """The only place JSON key naming and value formatting is converted."""
 
 import re
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
@@ -54,6 +55,32 @@ def read_json() -> dict[str, Any]:
         raise ValidationError("Request body must be a JSON object")
     result: dict[str, Any] = _convert_keys(data, to_snake)
     return result
+
+
+@dataclass(frozen=True)
+class UploadedFile:
+    """The single file of a multipart upload. `data` holds at most `max_bytes + 1` bytes."""
+
+    file_name: str
+    content_type: str
+    data: bytes
+
+
+def read_multipart_file(max_bytes: int) -> UploadedFile:
+    """Read exactly one file from the `file` field of a multipart request.
+
+    Reads at most `max_bytes + 1` bytes, so a caller can detect an oversized file
+    (`len(data) > max_bytes`) without loading the whole upload.
+    """
+    files = request.files
+    if len(files) != 1 or "file" not in files or len(files.getlist("file")) != 1:
+        raise ValidationError("Upload exactly one file in the 'file' field", field="file")
+    storage = files["file"]
+    return UploadedFile(
+        file_name=storage.filename or "",
+        content_type=storage.mimetype or "application/octet-stream",
+        data=storage.stream.read(max_bytes + 1),
+    )
 
 
 def read_query() -> dict[str, Any]:

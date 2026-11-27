@@ -1,4 +1,5 @@
 from flask_app.models.activity_entry import ActivityEntry
+from flask_app.models.attachment import Attachment
 from flask_app.models.base import BaseModel
 from flask_app.models.board import Board
 from flask_app.models.board_membership import BoardMembership
@@ -16,6 +17,7 @@ from flask_app.models.user import User
 
 __all__ = [
     "ActivityEntry",
+    "Attachment",
     "BaseModel",
     "Board",
     "BoardMembership",

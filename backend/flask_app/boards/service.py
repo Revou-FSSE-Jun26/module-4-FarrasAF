@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from flask_app.access.rbac import get_board_role
+from flask_app.attachments.service import board_asset_refs, destroy_assets
 from flask_app.columns.service import list_board_columns_service
 from flask_app.common.exceptions import AuthorizationError, NotFoundError, ValidationError
 from flask_app.extensions import db
@@ -102,5 +103,9 @@ def restore_board_service(board_id: UUID, user: User) -> dict[str, Any]:
 
 
 def delete_board_service(board_id: UUID) -> None:
-    db.session.delete(_get_board(board_id))
+    board = _get_board(board_id)
+    asset_refs = board_asset_refs(board_id)
+    db.session.delete(board)
     db.session.commit()
+    # After the commit, so a failed delete never loses the files (R22.13).
+    destroy_assets(asset_refs)

@@ -13,6 +13,8 @@ EVENT_TYPES = (
     "column_deleted",
     "member_joined",
     "member_removed",
+    "attachment_added",
+    "attachment_deleted",
 )
 
 

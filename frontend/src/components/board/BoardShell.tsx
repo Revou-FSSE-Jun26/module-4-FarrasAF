@@ -10,7 +10,8 @@ interface BoardShellProps {
 }
 
 export default function BoardShell({ children }: BoardShellProps) {
-  const { board, refreshBoard, openCardId, setOpenCardId } = useBoardContext();
+  const { board, refreshBoard, openCardId, setOpenCardId, currentUserId } =
+    useBoardContext();
   const openCard =
     board?.columns
       .flatMap((column) => column.cards)
@@ -25,6 +26,8 @@ export default function BoardShell({ children }: BoardShellProps) {
           key={openCard.id}
           boardId={board.id}
           card={openCard}
+          currentUserId={currentUserId}
+          currentUserRole={board.currentUserRole}
           onCardChange={refreshBoard}
           onClose={() => setOpenCardId(null)}
         />

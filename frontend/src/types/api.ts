@@ -22,7 +22,9 @@ export type ActivityEventType =
   | "column_created"
   | "column_deleted"
   | "member_joined"
-  | "member_removed";
+  | "member_removed"
+  | "attachment_added"
+  | "attachment_deleted";
 
 // ---------- Errors ----------
 
@@ -129,6 +131,18 @@ export interface ChecklistItem {
   createdAt: string;
 }
 
+export interface Attachment {
+  id: string;
+  cardId: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  url: string;
+  downloadUrl: string;
+  uploadedBy: { id: string; displayName: string };
+  createdAt: string;
+}
+
 export interface Card {
   id: string;
   columnId: string;
@@ -143,6 +157,7 @@ export interface Card {
   createdAt: string;
   updatedAt: string;
   checklistItems: ChecklistItem[];
+  attachments: Attachment[];
 }
 
 export interface CreateChecklistItemRequest {
@@ -182,6 +197,7 @@ export interface ActivityDetails {
   fromColumnName?: string;
   toColumnName?: string;
   memberName?: string;
+  fileName?: string;
 }
 
 export interface ActivityEntry {

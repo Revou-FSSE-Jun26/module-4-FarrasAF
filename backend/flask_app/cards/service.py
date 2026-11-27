@@ -4,6 +4,11 @@ from uuid import UUID
 from sqlalchemy import select, update
 
 from flask_app.activity.service import record_activity
+from flask_app.attachments.service import (
+    attachment_dict,
+    card_asset_refs,
+    destroy_assets,
+)
 from flask_app.checklist.service import checklist_item_dict
 from flask_app.common.exceptions import ConflictError, NotFoundError, ValidationError
 from flask_app.common.ordering import reindex
@@ -31,6 +36,10 @@ def _card_dict(card: Card) -> dict[str, Any]:
         "checklist_items": [
             checklist_item_dict(item)
             for item in card.checklist_items  # type: ignore[attr-defined]
+        ],
+        "attachments": [
+            attachment_dict(attachment)
+            for attachment in card.attachments  # type: ignore[attr-defined]
         ],
     }
 
@@ -177,9 +186,12 @@ def delete_card_service(card_id: UUID, user: User) -> None:
     card = _get_card(card_id)
     board_id = card.board_id
     card_title = card.title
+    asset_refs = card_asset_refs(card_id)
     cards = _lock_column_cards(card.column_id)
     cards.remove(card)
     db.session.delete(card)
     reindex(cards)
     record_activity(board_id, user.id, "card_deleted", card_id, details={"card_title": card_title})
     db.session.commit()
+    # After the commit, so a failed delete never loses the files (R22.13).
+    destroy_assets(asset_refs)

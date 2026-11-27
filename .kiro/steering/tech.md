@@ -12,7 +12,12 @@ tooling, and technical rules that apply to all work.
 - **Frontend**: Next.js (App Router), React, TypeScript, Tailwind CSS
 - **Drag-and-drop**: `@dnd-kit/core` and `@dnd-kit/sortable`
 - **Backend**: Python 3.14, Flask (application factory + blueprints), REST JSON API
-- **Backend libraries**: Flask-SQLAlchemy, Flask-Migrate, PyJWT, `psycopg[binary]` (PostgreSQL driver), `python-dotenv`, `gunicorn`, `argon2-cffi`, `marshmallow`
+- **Backend libraries**: Flask-SQLAlchemy, Flask-Migrate, PyJWT, `psycopg[binary]` (PostgreSQL driver), `python-dotenv`, `gunicorn`, `argon2-cffi`, `marshmallow`, `cloudinary`
+- **File storage**: Cloudinary (Card Attachments only). Flask receives the
+  upload and sends it to Cloudinary with the `cloudinary` SDK; the browser
+  never calls Cloudinary. Settings: `CLOUDINARY_CLOUD_NAME`,
+  `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`. The only module that
+  imports `cloudinary` is `backend/flask_app/common/storage.py`.
 - **Database**: PostgreSQL (local install for development, Supabase-hosted
   Postgres in production; no Docker), SQLAlchemy ORM, Alembic migrations
 - **Auth**: JWT access tokens (15 minutes) + hashed, revocable refresh tokens (7 days), both delivered as `HttpOnly` cookies. Passwords hashed with argon2 (`argon2-cffi`).
@@ -136,8 +141,9 @@ npx playwright test
 
 ## Constraints
 - Do not add dependencies outside this stack without an explicit spec change.
-- Do not introduce Docker, file storage, email, WebSockets, or third-party
-  integrations (see Non-Goals in `product.md`).
+- Do not introduce Docker, email, WebSockets, or third-party integrations
+  (see Non-Goals in `product.md`). The one exception is Cloudinary for Card
+  Attachments (spec v28); no other file storage or third-party service.
 - Do not hand-edit applied Alembic migrations; add a new one instead.
 - Do not use Supabase client libraries, Supabase Auth, Storage, Realtime, or
   the auto-generated Data API. The app uses its own JWT authentication and

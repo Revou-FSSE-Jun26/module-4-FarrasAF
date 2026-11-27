@@ -6,6 +6,7 @@ from werkzeug.exceptions import HTTPException
 from flask_app.access import access_bp, guest_bp
 from flask_app.activity import activity_bp
 from flask_app.analytics import analytics_bp
+from flask_app.attachments import attachments_bp
 from flask_app.auth import auth_bp
 from flask_app.boards import boards_bp
 from flask_app.cards import cards_bp
@@ -79,6 +80,7 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
     app.register_blueprint(columns_bp)
     app.register_blueprint(cards_bp)
     app.register_blueprint(checklist_bp)
+    app.register_blueprint(attachments_bp)
     app.register_blueprint(comments_bp)
     app.register_blueprint(activity_bp)
     app.register_blueprint(access_bp)

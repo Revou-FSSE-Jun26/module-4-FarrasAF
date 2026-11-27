@@ -3,16 +3,19 @@
 import type { FormEvent } from "react";
 import BaseButton from "@/components/shared/BaseButton";
 import BaseInput from "@/components/shared/BaseInput";
+import AttachmentSection from "@/components/card/AttachmentSection";
 import ChecklistProgress from "@/components/card/ChecklistProgress";
 import ChecklistSection from "@/components/card/ChecklistSection";
 import CommentSection from "@/components/comment/CommentSection";
 import BaseModal from "@/components/shared/BaseModal";
 import useCardDetail from "@/hooks/useCardDetail";
-import type { Card } from "@/types/api";
+import type { BoardRole, Card } from "@/types/api";
 
 interface CardDetailModalProps {
   boardId: string;
   card: Card;
+  currentUserId: string | null;
+  currentUserRole: BoardRole;
   onCardChange: () => Promise<void>;
   onClose: () => void;
 }
@@ -23,6 +26,8 @@ const FIELD_CLASSES =
 export default function CardDetailModal({
   boardId,
   card,
+  currentUserId,
+  currentUserRole,
   onCardChange,
   onClose,
 }: CardDetailModalProps) {
@@ -117,6 +122,14 @@ export default function CardDetailModal({
           cardId={card.id}
           items={card.checklistItems}
           onChecklistChange={onCardChange}
+        />
+
+        <AttachmentSection
+          cardId={card.id}
+          attachments={card.attachments}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+          onAttachmentsChange={onCardChange}
         />
 
         {detail.isConfirmingDelete ? (

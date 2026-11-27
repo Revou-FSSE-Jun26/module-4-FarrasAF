@@ -8,7 +8,7 @@ from typing import Literal
 from flask_app.auth.decorators import current_user, token_required
 from flask_app.common.exceptions import AuthorizationError, NotFoundError
 from flask_app.extensions import db
-from flask_app.models import BoardMembership, Card, ChecklistItem, Column, Comment
+from flask_app.models import Attachment, BoardMembership, Card, ChecklistItem, Column, Comment
 
 # Operation groups from the capability matrix in design.md.
 READ_BOARD_CONTENT = "read_board_content"
@@ -58,12 +58,17 @@ def _resolve_board_id(route_params: dict[str, object]) -> uuid.UUID:
         return board_id
 
     resolvers: tuple[
-        tuple[str, type[Column] | type[Card] | type[Comment] | type[ChecklistItem]], ...
+        tuple[
+            str,
+            type[Column] | type[Card] | type[Comment] | type[ChecklistItem] | type[Attachment],
+        ],
+        ...,
     ] = (
         ("column_id", Column),
         ("card_id", Card),
         ("comment_id", Comment),
         ("item_id", ChecklistItem),
+        ("attachment_id", Attachment),
     )
     for param, model in resolvers:
         value = route_params.get(param)
@@ -81,6 +86,13 @@ def _resolve_board_id(route_params: dict[str, object]) -> uuid.UUID:
                 db.session.query(Card.board_id)
                 .join(ChecklistItem, ChecklistItem.card_id == Card.id)
                 .filter(ChecklistItem.id == value)
+                .scalar()
+            )
+        elif model is Attachment:
+            resolved = (
+                db.session.query(Card.board_id)
+                .join(Attachment, Attachment.card_id == Card.id)
+                .filter(Attachment.id == value)
                 .scalar()
             )
         else:

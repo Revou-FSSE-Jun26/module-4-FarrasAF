@@ -39,6 +39,7 @@ backend/
 │   ├── columns/              # Column_Service
 │   ├── cards/                # Card_Service
 │   ├── comments/             # Comment_Service
+│   ├── attachments/          # Attachment_Service (Card file attachments, stored in Cloudinary)
 │   ├── notifications/        # Notification_Service
 │   ├── search/               # Search_Service
 │   ├── activity/             # Activity_Service
@@ -46,7 +47,8 @@ backend/
 │   └── common/               # exceptions.py, validation.py (BaseSchema, TrimmedStr, NonBlankStr, load_schema),
 │                             # serialization.py (read_json, read_query, json_response),
 │                             # ordering.py (reindex), cursor.py, pagination.py (page size constants),
-│                             # time.py (utc_now), health.py
+│                             # time.py (utc_now), health.py,
+│                             # storage.py (Cloudinary upload/delete; the only importer of `cloudinary`)
 ├── migrations/               # Alembic (never hand-edit applied migrations)
 ├── scripts/
 │   ├── __init__.py
@@ -70,6 +72,8 @@ Each service package (`cards/`, `boards/`, ...) contains:
 
 Cross-module calls go through service functions, never through another
 module's routes. Models live only in `models/`.
+
+`attachments/` has no `schema.py`: its only request body is one multipart file, checked by the pure `validate_upload()` in `service.py` (the file is read through `read_multipart_file()` in `common/serialization.py`).
 
 Exceptions to the convention: `common/health.py` (public `GET /api/health`, no auth, never touches the database) and `access/rbac.py` have no routes of their own to structure this way. A module has no `schema.py` when none of its routes take a request body or query string (for example `analytics/` and the Guest routes in `access/`). `access/` may define two Blueprints: `access_bp` (members and invitations) and `guest_bp` (Guest routes).
 

@@ -39,6 +39,7 @@ Board access comes only from Board membership, and only Team members can be adde
 - Boards with ordered Columns and Cards
 - Drag-and-drop Card movement and ordering
 - A to-do list on each Card (add, edit, tick, delete) with a progress bar
+- File attachments on Cards, stored in Cloudinary (up to 5 files of 5 MB each; Members upload, the uploader or an Admin deletes; not visible to Guests)
 - Threaded Comments with @Mentions and Mention Notifications
 - Card search by title
 - Activity Log and basic Board Analytics
@@ -47,7 +48,6 @@ Board access comes only from Board membership, and only Team members can be adde
 
 ## Non-Goals (V1)
 Do not implement or suggest these unless a spec explicitly adds them:
-- File attachments
 - Email notifications
 - Third-party integrations
 - Advanced analytics and burndown charts
