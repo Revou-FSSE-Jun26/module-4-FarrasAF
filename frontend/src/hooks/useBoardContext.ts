@@ -7,6 +7,9 @@ export interface BoardContextValue extends UseBoardResult {
   boardId: string;
   openCardId: string | null;
   setOpenCardId: (cardId: string | null) => void;
+  currentUserId: string | null;
+  isMyTasksOn: boolean;
+  setIsMyTasksOn: (isOn: boolean) => void;
 }
 
 export const BoardContext = createContext<BoardContextValue | null>(null);

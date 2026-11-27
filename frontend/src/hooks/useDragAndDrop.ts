@@ -10,6 +10,8 @@ import type { BoardDetail } from "@/types/api";
 interface UseDragAndDropParams {
   board: BoardDetail | null;
   onBoardChange: (board: BoardDetail) => void;
+  // Turns dragging off while the Board view hides some Cards (My Tasks).
+  isDisabled?: boolean;
 }
 
 interface UseDragAndDropResult {
@@ -23,10 +25,12 @@ interface UseDragAndDropResult {
 export default function useDragAndDrop({
   board,
   onBoardChange,
+  isDisabled = false,
 }: UseDragAndDropParams): UseDragAndDropResult {
   const { showError } = useToast();
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const isDragEnabled =
+    !isDisabled &&
     board !== null &&
     board.status === "active" &&
     canDragCards(board.currentUserRole);

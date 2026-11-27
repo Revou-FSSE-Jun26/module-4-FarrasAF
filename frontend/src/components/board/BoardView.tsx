@@ -22,6 +22,7 @@ import BaseInput from "@/components/shared/BaseInput";
 import BaseLoadingState from "@/components/shared/BaseLoadingState";
 import useBoardContext from "@/hooks/useBoardContext";
 import useDragAndDrop from "@/hooks/useDragAndDrop";
+import { filterColumnsByAssignee } from "@/lib/myTasks";
 
 interface AddColumnFormProps {
   onColumnAdd: (name: string) => Promise<boolean>;
@@ -82,6 +83,8 @@ export default function BoardView() {
     addCard,
     setBoard,
     setOpenCardId,
+    currentUserId,
+    isMyTasksOn,
   } = useBoardContext();
   const {
     isDragEnabled,
@@ -89,7 +92,11 @@ export default function BoardView() {
     handleDragStart,
     handleDragEnd,
     handleDragCancel,
-  } = useDragAndDrop({ board, onBoardChange: setBoard });
+  } = useDragAndDrop({
+    board,
+    onBoardChange: setBoard,
+    isDisabled: isMyTasksOn,
+  });
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor),
@@ -108,7 +115,10 @@ export default function BoardView() {
   const isAdmin = board.currentUserRole === "admin";
   const allCards = board.columns.flatMap((c) => c.cards);
   const activeCard = allCards.find((c) => c.id === activeCardId) ?? null;
-  const columns = [...board.columns].sort(
+  const visibleColumns = isMyTasksOn
+    ? filterColumnsByAssignee(board.columns, currentUserId ?? "")
+    : board.columns;
+  const columns = [...visibleColumns].sort(
     (a, b) => a.orderIndex - b.orderIndex,
   );
 
@@ -145,9 +155,18 @@ export default function BoardView() {
               </span>
             ) : null}
           </div>
-          <BoardProgress columns={board.columns} />
+          <BoardProgress columns={visibleColumns} />
         </div>
       </div>
+
+      {isMyTasksOn ? (
+        <p
+          role="status"
+          className="rounded-lg border border-[#211621] bg-[#c9b7ef]/50 px-3 py-2 text-sm text-[#211621]"
+        >
+          My Tasks is on. Cards cannot be moved or added until you turn it off.
+        </p>
+      ) : null}
 
       {columns.length === 0 ? (
         <BaseEmptyState
@@ -175,6 +194,7 @@ export default function BoardView() {
               isDragEnabled={isDragEnabled}
               isFirst={index === 0}
               isLast={index === columns.length - 1}
+              isMyTasksOn={isMyTasksOn}
               onColumnRename={(name) => renameColumn(column.id, name)}
               onColumnMove={(offset) => moveColumn(column.id, index + offset)}
               onColumnDelete={() => deleteColumn(column.id)}

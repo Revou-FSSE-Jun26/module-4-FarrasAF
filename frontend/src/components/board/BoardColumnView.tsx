@@ -21,6 +21,7 @@ interface BoardColumnViewProps {
   isDragEnabled: boolean;
   isFirst: boolean;
   isLast: boolean;
+  isMyTasksOn: boolean;
   onColumnRename: (name: string) => Promise<boolean>;
   onColumnMove: (offset: -1 | 1) => Promise<boolean>;
   onColumnDelete: () => Promise<boolean>;
@@ -34,6 +35,7 @@ export default function BoardColumnView({
   isDragEnabled,
   isFirst,
   isLast,
+  isMyTasksOn,
   onColumnRename,
   onColumnMove,
   onColumnDelete,
@@ -225,7 +227,7 @@ export default function BoardColumnView({
                 : "border-slate-200/90 text-slate-400"
             }`}
           >
-            No cards yet
+            {isMyTasksOn ? "No tasks assigned to you" : "No cards yet"}
           </p>
         ) : isDragEnabled ? (
           <SortableContext
@@ -251,7 +253,9 @@ export default function BoardColumnView({
         )}
       </div>
 
-      <AddCardForm columnName={column.name} onCardAdd={onCardAdd} />
+      {isMyTasksOn ? null : (
+        <AddCardForm columnName={column.name} onCardAdd={onCardAdd} />
+      )}
 
       <BaseModal
         isOpen={isConfirmingDelete}

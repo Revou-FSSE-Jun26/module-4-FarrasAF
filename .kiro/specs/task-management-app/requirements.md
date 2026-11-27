@@ -358,6 +358,12 @@ The application targets clear visibility into task progress, task ownership, and
 7. IF no Card of the Board matches the typed text, THEN THE System SHALL show a message that no Cards match; IF the search field is empty after trimming, THEN THE System SHALL show no search results.
 8. THE System SHALL compute the in-Board search results from the Board data already loaded for the page, without a separate Card search request, and Requirement 7 (Card Search across accessible Boards) SHALL remain unchanged.
 9. WHERE a client viewport width is less than 1024 pixels, THE System SHALL place the sidebar above the page content with no overlapping content and no horizontal page scrolling, consistent with Requirement 14.4.
+10. THE sidebar SHALL contain a "My Tasks" button that turns a "My Tasks" filter on and off, and SHALL show whether the filter is on.
+11. WHILE the "My Tasks" filter is on, THE System SHALL show on the Board view only the Cards whose Assignee is the current User, in their Columns and in their usual order, and SHALL keep every Column visible; a Column with no such Card SHALL show a message that no tasks are assigned to the User.
+12. WHEN a User turns the "My Tasks" filter on from the Activity, Analytics, or Board settings page, THE System SHALL open the Board view with the filter on.
+13. WHILE the "My Tasks" filter is on, THE System SHALL NOT allow Card drag-and-drop and SHALL NOT show the add-Card form, and SHALL show a short hint on the Board view that the filter is on and that Cards cannot be moved or added until it is turned off. Requirement 4 applies again when the filter is off.
+14. WHILE the "My Tasks" filter is on, THE sidebar search (criteria 3 to 7) SHALL list only the Cards assigned to the current User.
+15. THE "My Tasks" filter SHALL be computed from the Board data already loaded for the page, without a separate request, SHALL be off after the page is reloaded and when another Board is opened, and SHALL NOT change any stored data.
 
 ### Requirement 20: Card To-Do List and Progress
 
@@ -389,3 +395,4 @@ The application targets clear visibility into task progress, task ownership, and
 4. WHEN a Card is created, deleted, or moved, or a Column is renamed, added, or deleted, THE System SHALL update the progress bar to match the Board data shown on the page.
 5. THE System SHALL compute the progress bar from the Board data already loaded for the page, without a separate request; Requirement 9 (Board Analytics) SHALL remain unchanged.
 6. WHERE a client viewport width is less than 1024 pixels, THE System SHALL show the progress bar without overlapping the Board title and without horizontal page scrolling, consistent with Requirement 14.4.
+7. WHILE the "My Tasks" filter of Requirement 19.10 is on, THE System SHALL compute the progress bar from only the Cards assigned to the current User (Cards in "Done" Columns over all Cards assigned to the User), and SHALL show 0% when no Card is assigned to the User.

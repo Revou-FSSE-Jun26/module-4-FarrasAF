@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import useAuth from "@/hooks/useAuth";
 import useBoard from "@/hooks/useBoard";
 import { BoardContext } from "@/hooks/useBoardContext";
 
@@ -17,6 +18,8 @@ export default function BoardProvider({
 }: BoardProviderProps) {
   const boardState = useBoard(boardId);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [isMyTasksOn, setIsMyTasksOn] = useState<boolean>(false);
+  const { user } = useAuth({ shouldLoadUser: true });
   const pathname = usePathname();
   const previousPathname = useRef<string>(pathname);
   const { refreshBoard } = boardState;
@@ -33,7 +36,15 @@ export default function BoardProvider({
 
   return (
     <BoardContext.Provider
-      value={{ ...boardState, boardId, openCardId, setOpenCardId }}
+      value={{
+        ...boardState,
+        boardId,
+        openCardId,
+        setOpenCardId,
+        currentUserId: user?.id ?? null,
+        isMyTasksOn,
+        setIsMyTasksOn,
+      }}
     >
       {children}
     </BoardContext.Provider>
