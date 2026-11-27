@@ -38,6 +38,7 @@ Board access comes only from Board membership, and only Team members can be adde
 - Teams: create a Team and bring people in through Team Join Links
 - Boards with ordered Columns and Cards
 - Drag-and-drop Card movement and ordering
+- A to-do list on each Card (add, edit, tick, delete) with a progress bar
 - Threaded Comments with @Mentions and Mention Notifications
 - Card search by title
 - Activity Log and basic Board Analytics
@@ -52,7 +53,7 @@ Do not implement or suggest these unless a spec explicitly adds them:
 - Advanced analytics and burndown charts
 - Real-time collaboration (WebSockets); Notifications use HTTP polling
 - Password reset and email verification (no email in V1)
-- Card labels, checklists, priorities, or multiple Assignees
+- Card labels, priorities, or multiple Assignees
 - Cross-Board Card moves, Card archiving, or Board templates
 - Removing members from a Team, leaving a Team, changing Team roles, or renaming or deleting a Team
 - Guest accounts (Guests are always anonymous and read-only)

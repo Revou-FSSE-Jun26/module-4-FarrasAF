@@ -120,6 +120,15 @@ export interface Column {
   createdAt: string;
 }
 
+export interface ChecklistItem {
+  id: string;
+  cardId: string;
+  text: string;
+  isDone: boolean;
+  orderIndex: number;
+  createdAt: string;
+}
+
 export interface Card {
   id: string;
   columnId: string;
@@ -133,6 +142,16 @@ export interface Card {
   version: number;
   createdAt: string;
   updatedAt: string;
+  checklistItems: ChecklistItem[];
+}
+
+export interface CreateChecklistItemRequest {
+  text: string;
+}
+
+export interface UpdateChecklistItemRequest {
+  text?: string;
+  isDone?: boolean;
 }
 
 export interface Comment {
@@ -155,13 +174,23 @@ export interface Notification {
   createdAt: string;
 }
 
+// Names saved when the event happened. Which keys are set depends on the event
+// type; null for entries recorded before details existed.
+export interface ActivityDetails {
+  cardTitle?: string;
+  columnName?: string;
+  fromColumnName?: string;
+  toColumnName?: string;
+  memberName?: string;
+}
+
 export interface ActivityEntry {
   id: string;
-  boardId: string;
-  actorId: string;
   eventType: ActivityEventType;
+  actor: { id: string; displayName: string };
   resourceId: string;
   secondaryResourceId: string | null;
+  details: ActivityDetails | null;
   createdAt: string;
 }
 
@@ -211,6 +240,12 @@ export interface GuestUser {
   displayName: string;
 }
 
+export interface GuestChecklistItem {
+  id: string;
+  text: string;
+  isDone: boolean;
+}
+
 export interface GuestCard {
   id: string;
   title: string;
@@ -218,6 +253,7 @@ export interface GuestCard {
   orderIndex: number;
   dueDate: string | null;
   assignee: GuestUser | null;
+  checklistItems: GuestChecklistItem[];
 }
 
 export interface GuestColumn {

@@ -200,15 +200,57 @@ def test_remove_member_service_removes_member(
     assert db_session.query(BoardMembership).filter_by(user_id=user.id).count() == 0
 
 
-def test_remove_member_service_keeps_last_admin_and_unknown_member(
-    make_board: Callable[..., Board], make_user: Callable[..., User]
+def test_remove_member_service_rejects_any_admin_and_unknown_member(
+    db_session: Any, make_board: Callable[..., Board], make_user: Callable[..., User]
 ) -> None:
     admin = make_user()
     board = make_board(admin=admin)
-    with pytest.raises(ValidationError):
-        remove_member_service(board.id, admin.id, admin)
+    second_admin = make_user()
+    _board_member(db_session, board, second_admin, "admin")
+    # Neither the only Admin nor one of several Admins (nor the actor themself) can be removed.
+    for target in (admin, second_admin):
+        with pytest.raises(ValidationError):
+            remove_member_service(board.id, target.id, admin)
+    assert db_session.query(BoardMembership).filter_by(board_id=board.id).count() == 2
     with pytest.raises(NotFoundError):
         remove_member_service(board.id, uuid.uuid4(), admin)
+
+
+def test_admin_can_be_removed_only_after_demotion_to_member(
+    db_session: Any, make_board: Callable[..., Board], make_user: Callable[..., User]
+) -> None:
+    admin = make_user()
+    board = make_board(admin=admin)
+    other = make_user()
+    _board_member(db_session, board, other, "admin")
+
+    change_member_role_service(board.id, other.id, {"role": "member"})
+    remove_member_service(board.id, other.id, admin)
+
+    assert db_session.query(BoardMembership).filter_by(user_id=other.id).count() == 0
+
+
+def test_remove_admin_through_the_api_is_a_validation_error(
+    client: Any, db_session: Any, make_board: Callable[..., Board]
+) -> None:
+    board = make_board()
+    identity = register_service(
+        {"email": "ada@example.com", "password": PASSWORD, "display_name": "Ada"}
+    )
+    ada: User = db_session.get(User, identity["id"])
+    _board_member(db_session, board, ada, "admin")
+    assert (
+        client.post(
+            "/api/auth/login", json={"email": "ada@example.com", "password": PASSWORD}
+        ).status_code
+        == 200
+    )
+
+    response = client.delete(f"/api/boards/{board.id}/members/{ada.id}")
+
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "validation_error"
+    assert db_session.query(BoardMembership).filter_by(user_id=ada.id).count() == 1
 
 
 # --- invitations (R11.x) ------------------------------------------------------

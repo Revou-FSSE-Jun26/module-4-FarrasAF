@@ -75,16 +75,18 @@ export default function BoardMemberPanel({
                     <option value="admin">Admin</option>
                     <option value="member">Member</option>
                   </select>
-                  <BaseButton
-                    variant="danger"
-                    isLoading={isBusy}
-                    aria-label={`Remove ${member.displayName}`}
-                    onClick={() =>
-                      void run(() => onMemberRemove(member.userId))
-                    }
-                  >
-                    Remove
-                  </BaseButton>
+                  {member.role === "member" ? (
+                    <BaseButton
+                      variant="danger"
+                      isLoading={isBusy}
+                      aria-label={`Remove ${member.displayName}`}
+                      onClick={() =>
+                        void run(() => onMemberRemove(member.userId))
+                      }
+                    >
+                      Remove
+                    </BaseButton>
+                  ) : null}
                 </span>
               ) : (
                 <span className="text-gray-600">

@@ -1,6 +1,6 @@
 """Property 23: Board retains at least one Admin.
 
-**Validates: Requirements 10.6**
+**Validates: Requirements 10.6, 10.10**
 """
 
 from collections.abc import Callable
@@ -75,12 +75,9 @@ def test_board_always_retains_an_admin_and_rejections_change_nothing(
         before = _members(db_session, board)
         admins = [uid for uid, role in before.items() if role == "admin"]
         is_member = target.id in before
-        would_orphan = (
-            is_member
-            and before[target.id] == "admin"
-            and len(admins) == 1
-            and (kind == "remove" or new_role != "admin")
-        )
+        is_admin = is_member and before[target.id] == "admin"
+        # An Admin can never be removed (R10.10); a role change must keep one Admin (R10.6).
+        would_orphan = is_admin and (kind == "remove" or (len(admins) == 1 and new_role != "admin"))
 
         if not is_member:
             with pytest.raises(NotFoundError):

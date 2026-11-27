@@ -2,6 +2,78 @@
 
 All notable changes to the task-management-app spec are documented here. Versions are ordered newest-first. The version is bumped each time a spec document (requirements.md, design.md, or tasks.md) is changed.
 
+## v25 - 2026-11-26 - Only Members can be removed from a Board
+### Changes
+- **Specification changes:** requirements.md Requirement 10 gains 10.10: a removal request for a Board member whose role is Admin (including the requester) is rejected with a validation error and membership stays unchanged, and Board settings shows no remove action for an Admin. 10.6 now covers role changes only, because removal can no longer take away an Admin. 10.2 is unchanged (it already said an Admin removes a Member).
+- **Design changes:** design.md Property 23 now covers both rules (role change must keep one Admin; an Admin can never be removed; Validates 10.6 and 10.10) and the `DELETE /api/boards/{boardId}/members/{userId}` row describes the new rule. No data model change.
+- **Implementation changes:** `remove_member_service` rejects an Admin with a validation error (the old "last Admin" check is gone because it can no longer apply); `BoardMemberPanel` shows the Remove button only for members whose role is Member; `openapi.yaml` description updated. To remove an Admin, change the role to Member first (role changes are unchanged). Tests updated: `test_access.py` (any Admin rejected, demote-then-remove, API returns 400), Property 23, Property 24, and the role-change API flow.
+- **Bug fixes:** none.
+- **Breaking changes:** `DELETE /api/boards/{boardId}/members/{userId}` now returns 400 for an Admin member that it used to remove (when another Admin existed).
+### Reason
+Request that only members, not Admins, can be removed from a Board. Admins stay manageable through the existing role change.
+### Impact
+- Affected requirements: 10.6 narrowed, 10.10 added.
+- Affected design components: Property 23, Access_Control_Service endpoint table.
+- Affected implementation tasks: 8.1 and 8.4 text and requirement references updated; mapping row R10.10 added. Unit, property, and API tests changed.
+
+## v24 - 2026-11-26 - Board progress bar
+### Changes
+- **Specification changes:** requirements.md gains Requirement 21 (criteria 21.1 to 21.6): a progress bar at the top right of the Board view, in the Board title row, showing Cards in Columns named exactly "Done" divided by all Cards as a rounded whole percent (6 of 10 shows 60%); all "Done" Columns count together (as in R9.3); 0% for a Board with no Cards; it follows Card and Column changes; computed from the loaded Board with no separate request; stacks without overlap below 1024px. Requirements 1 to 20 are unchanged.
+- **Design changes:** design.md Frontend Structure gains a "Board progress bar (R21)" bullet. No endpoint, data model, or property change.
+- **Implementation changes:** new `lib/boardProgress.ts`, `components/board/BoardProgress.tsx`, and shared `components/shared/BaseProgressBar.tsx` (the Card to-do progress `ChecklistProgress` now uses it, with the same look); the `BoardView` header row was restructured so the bar sits level with the title. Task 15.9 added (completed), wave 119 appended, mapping rows R21.1 to R21.6.
+- **Bug fixes:** none.
+- **Breaking changes:** none.
+### Reason
+Request for a Board-level progress bar based on the share of Cards in the "Done" Column. Choices that follow existing rules: the "Done" match and multi-Column counting follow Analytics (R9.3), and rounding follows the Card to-do bar (R20.11).
+### Impact
+- Affected requirements: Requirement 21 added.
+- Affected design components: Frontend Structure.
+- Affected implementation tasks: 15.9 added. No E2E test written for this flow; task 19 stays open.
+
+## v23 - 2026-11-26 - Card to-do list and progress bar
+### Changes
+- **Specification changes:** requirements.md gains Requirement 20 (criteria 20.1 to 20.11) and the glossary term "To-do item": one to-do list per Card; Members and Admins add (text 1 to 255 after trimming, at most 50 items, appended last), edit the text, tick and untick, and delete items; item changes do not change the Card's version or Updated timestamp and create no Activity_Entry or Notification; Guests see the list read-only; the Card details show a progress bar at the top right in the Title row (done items divided by all items, rounded to a whole percent, hidden when there are no items). Requirements 1 to 19 are unchanged.
+- **Steering change:** `product.md` no longer lists "checklists" under the V1 Non-Goals and lists the to-do list under Core Features (approved by the user).
+- **Design changes:** design.md gains the `ChecklistItem` entity, three endpoints (`POST /api/cards/{cardId}/checklist-items`, `PATCH` and `DELETE /api/checklist-items/{itemId}`), the `ChecklistItem` response schema, `checklistItems` on the Card and Guest board schemas, the service table row, and a Frontend Structure bullet. No new property: the to-do rules are covered by unit and API tests.
+- **Implementation changes:** new table `checklist_items` (migration `d5e6f7a8b9c0`), `checklist/` backend module, RBAC resolution for `item_id` routes in `rbac.py`, `checklistItems` embedded in Card and Guest responses, `openapi.yaml` updated, frontend types, API client methods, `lib/checklist.ts`, `useChecklist`, and the `ChecklistProgress`, `ChecklistSection`, and `ChecklistItemRow` components. Tasks 6.5 and 15.8 added (completed), waves 117 and 118 appended, mapping rows R20.1 to R20.11.
+- **Bug fixes:** none.
+- **Breaking changes:** none. Card and Guest card responses gain a `checklistItems` array.
+### Reason
+Request to add a to-do list to Card details with a progress bar. Decisions confirmed with the user: one list per card, add/edit/tick/untick/delete without reordering, limits of 255 characters and 50 items, only Members and Admins can change items, no concurrency check and no Activity entries for item changes, progress on the Card details only, and no change to Notifications or search.
+### Impact
+- Affected requirements: Requirement 20 added; glossary updated.
+- Affected design components: Service table, Data Models, API Design (Card_Service table and response schemas), Frontend Structure.
+- Affected implementation tasks: 6.5 and 15.8 added. The Playwright E2E test for this flow is not written yet; task 19 stays open (see also 19.11).
+
+## v22 - 2026-11-26 - Activity sentences with the user name and event details
+### Changes
+- **Specification changes:** requirements.md Requirement 8 gains 8.16 (store the names needed for the sentence with each Activity_Entry, return the actor's display name and those names, none for older entries) and 8.17 (show a sentence starting with the user's display name, for example `Ada moved the card "Fix login" from "To Do" to "Doing"`). 8.1 to 8.15 are unchanged.
+- **Design changes:** design.md ActivityEntry data model gains the nullable `details` JSON column; the ActivityEntry response schema now matches what the API sends (`actor: { id, displayName }`, `details`; the earlier `boardId` and `actorId` were never returned) and lists the `details` keys per event type.
+- **Implementation changes:** new migration `c4d5e6f7a8b9` adds `activity_entries.details`; `record_activity` accepts `details`; the cards, columns, comments, and access services save the names in the same transaction; `openapi.yaml` updated; frontend `ActivityEntry` type, `lib/activityText.ts`, `ActivityView`, and `useActivity` changed. Tasks 6.4 and 15.7 added (completed), waves 115 and 116 appended, mapping rows R8.16 and R8.17.
+- **Bug fixes:** the Activity page showed "Unknown user" for every entry because the frontend read `actorId`, which the API never sent (it sends `actor`). The name now comes from `actor.displayName`.
+- **Breaking changes:** the ActivityEntry response shape in the design document changed to match the real API; the actual API response only gains `details`.
+### Reason
+Request to show the real user name on the Activity page and to describe each event in a full sentence. Decisions confirmed with the user: show the user name only, use the proposed wording per event, and add a `details` column with a migration.
+### Impact
+- Affected requirements: 8.16 and 8.17 added.
+- Affected design components: Data Models (ActivityEntry), API Response Schemas (ActivityEntry).
+- Affected implementation tasks: 6.4 and 15.7 added.
+- Existing Activity entries have no details and show the shorter sentence (for example `Ada moved the card`).
+
+## v21 - 2026-11-26 - Board sidebar navigation and in-Board Card search
+### Changes
+- **Specification changes:** requirements.md gains Requirement 19 (criteria 19.1 to 19.9): a sidebar on the four Board pages (Board, Activity, Analytics, Board settings) with the current page marked, the Activity, Analytics, and Board settings links moved out of the Board view header into the sidebar, and a sidebar search field that lists the Cards of that Board whose Title contains the typed text (trimmed, case-insensitive substring) after every keystroke, shows Title and Column name, opens the Card on selection, shows a no-match message, and stacks above the content below 1024px. Requirements 1 to 18 are unchanged.
+- **Design changes:** design.md Frontend Structure gains a "Board sidebar and in-Board search (R19)" bullet: Board `layout.tsx`, `BoardProvider` (one `useBoard` call shared through context), `BoardShell`, `BoardSidebar`, and the pure `filterCardsByTitle` helper. Search runs in the browser on the loaded Board; no endpoint, API type, or dependency is added.
+- **Implementation changes:** task 15.6 (completed) and 19.11 (E2E, not started) added; parent task 19 reopened; two waves (113, 114) appended to the dependency graph so earlier wave numbers stay unchanged; the Requirement-to-Task Mapping gains R19.1 to R19.9.
+- **Bug fixes:** none (the "Create Board" and "Create Team" button alignment and the RevoTask header name and logo were cosmetic implementation changes and need no spec version).
+- **Breaking changes:** none.
+### Reason
+Request for a left sidebar on the Board pages like a project sidebar, holding Activity, Analytics, and Board settings plus a live search of that Board's Cards. Decisions: the sidebar appears on all four Board pages, results are a list in the sidebar (the Board columns are not filtered), and matching is client-side because the Board's Cards are already loaded.
+### Impact
+- Affected requirements: Requirement 19 added.
+- Affected design components: Frontend Structure.
+- Affected implementation tasks: 15.6 added, 19.11 added, 19 reopened; mapping rows R19.1 to R19.9.
+
 ## v20 - 2026-11-20 - User profile (display name and password)
 ### Changes
 - **Specification changes:** requirements.md gains Requirement 18 (User Profile, criteria 18.1 to 18.11): view the Profile, edit the display name (1 to 50 characters after trimming), reject any other Profile field including the email, show the new name in later responses, change the password with the current password (new password at least 8 characters and different, all refresh tokens revoked, new cookies issued, failure count reset), count a wrong current password toward the existing lockout, give a locked account the same error as a wrong password, and provide a `/profile` page. Added the "Profile" glossary term and updated the Introduction (Profile page added; changing the email address added to the V1 exclusions). Requirements 1 to 17 are unchanged and not renumbered.

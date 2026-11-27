@@ -79,14 +79,13 @@ export default function CreateBoardForm({
           ))}
         </select>
       </div>
-      <div className="flex items-center"><BaseButton
+      <BaseButton
         type="submit"
         isLoading={isSubmitting}
-        className="h-10 shrink-0 whitespace-nowrap"
+        className="h-10 shrink-0 whitespace-nowrap lg:mt-[26px]"
       >
         Create Board
       </BaseButton>
-      </div>
     </form>
   );
 }

@@ -214,6 +214,17 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - `schema.py` (`page` strict integer), `routes.py` `GET /api/boards/{boardId}/activity` with `@require_role('member')`, response `{ items, page, pageSize }`; register Blueprint in `app.py`
     - _Requirements: 8.1, 8.12, 8.13, 8.14, 8.15_
 
+  - [x] 6.4 Store and return Activity details
+    - New nullable JSON column `activity_entries.details` with a new Alembic migration `c4d5e6f7a8b9` (downgrade drops the column; the applied migrations are not edited); `record_activity(..., details=None)` stores it; the cards, columns, comments, and access services pass the names listed in design.md (read before the target is deleted) in the same transaction; `list_activity_service` returns `details`
+    - Update `backend/openapi.yaml` (`ActivityEntry`: `actor`, `details`)
+    - Existing entries keep `details = NULL`
+    - _Requirements: 8.16_
+
+  - [x] 6.5 Implement the to-do list backend
+    - Model `ChecklistItem` (`checklist_items`, FK to `cards` with `ON DELETE CASCADE`), new migration `d5e6f7a8b9c0`, `Card.checklist_items` (`selectin`); new `checklist/` module (`routes.py`, `schema.py`, `service.py`, `__init__.py`) with `POST /api/cards/{cardId}/checklist-items`, `PATCH` and `DELETE /api/checklist-items/{itemId}` for Members and Admins (`@require_role('member')`; `rbac.py` resolves the Board from `item_id`); at most 50 items, locked Card row on add, no Card `version` change, no Activity entry; Card and Guest Board responses embed `checklistItems`; `openapi.yaml` updated
+    - Tests: `tests/unit/test_checklist.py`, and an API flow in `tests/integration/test_api_flows.py` (outsider rejected, Guest read-only, items in Card and Board payloads)
+    - _Requirements: 20.1, 20.2, 20.3, 20.4, 20.5, 20.6, 20.7, 20.8, 20.9, 20.10_
+
   - [x] 6.2 Write property test for Activity pagination
     - File: `tests/properties/test_property_18_activity_pagination.py`
     - **Property 18: Activity pagination visits each entry exactly once in order**
@@ -261,9 +272,9 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
 
 - [x] 8. Access_Control_Service: members and invitations
   - [x] 8.1 Implement Board member management in `access/`
-    - `service.py`: list members, add member (`user_id` must be a Team_Member of the Board's Team, role `member`/`admin`, not already a member), change role, remove member (never leaving zero Admins); record `member_joined` / `member_removed` via `record_activity()` in the same transaction
+    - `service.py`: list members, add member (`user_id` must be a Team_Member of the Board's Team, role `member`/`admin`, not already a member), change role (never leaving zero Admins), remove member (only a member whose role is Member; an Admin must be changed to Member first, R10.10); record `member_joined` / `member_removed` via `record_activity()` in the same transaction
     - `schema.py`, `routes.py` (`access_bp`) per the members endpoint table; roles read from stored membership so changes apply on the next request; register Blueprint in `app.py`
-    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 8.10, 8.11_
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 10.10, 8.10, 8.11_
 
   - [x] 8.2 Implement Invitation_Link generate, list, and revoke
     - `service.py`: generate (`secrets.token_urlsafe`), list, revoke (only that link becomes inactive; Admin only)
@@ -278,7 +289,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
   - [x] 8.4 Write property test for the last-Admin invariant
     - File: `tests/properties/test_property_23_last_admin.py`
     - **Property 23: Board retains at least one Admin**
-    - **Validates: Requirements 10.6**
+    - **Validates: Requirements 10.6, 10.10**
 
   - [x] 8.5 Write property test for role changes applying on the next request
     - File: `tests/properties/test_property_24_role_change_next_request.py`
@@ -486,6 +497,27 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Add a "Profile" link to the primary navigation in the app shell
     - _Requirements: 18.1, 18.2, 18.3, 18.6, 18.7, 18.9, 18.11_
 
+  - [x] 15.6 Add the Board sidebar and in-Board Card search
+    - `src/lib/boardSearch.ts`: pure `filterCardsByTitle(columns, query)` (trim, empty query gives no results, case-insensitive substring on Title, result carries the Column name, Column order then Card order); no React dependency
+    - `src/hooks/useBoardContext.ts` (context and hook), `src/components/board/BoardProvider.tsx` (one `useBoard` call per Board, plus open Card id), `BoardShell.tsx` (sidebar plus content plus the single `CardDetailModal`), `BoardSidebar.tsx` (Board name, links to Board, Activity, Analytics, Board settings with `aria-current`, search field and result list with loading, empty, and no-match states), `src/app/(app)/boards/[boardId]/layout.tsx`
+    - `BoardView` reads the Board from the context and drops its Activity, Analytics, and Board settings header links and its own modal; no new endpoint, dependency, or API type
+    - Sidebar stacks above the content below 1024px
+    - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 19.7, 19.8, 19.9_
+
+  - [x] 15.7 Show Activity sentences with the user name
+    - `src/types/api.ts` `ActivityEntry` now has `actor: { id, displayName }` and `details` (fixes the "Unknown user" text, which came from reading a field the API does not send); pure `src/lib/activityText.ts` (`describeActivity`) builds the sentence; `ActivityView` uses it and `useActivity` no longer loads Board members
+    - _Requirements: 8.17_
+
+  - [x] 15.8 Add the Card to-do list and progress bar
+    - `types/api.ts` (`ChecklistItem`, `Card.checklistItems`, `GuestChecklistItem`, request types), `apiClient.ts` (`createChecklistItem`, `updateChecklistItem`, `deleteChecklistItem`), pure `lib/checklist.ts` (`checklistProgress`, limits), `hooks/useChecklist.ts` (calls the API, refetches the Board, toasts failures)
+    - `components/card/`: `ChecklistProgress` (rendered at the top right of the Card details in the Title row, only when the Card has items), `ChecklistSection` and `ChecklistItemRow` (add, edit text, tick, untick, delete; Enter does not submit the Card form); read-only list and bar in the Guest Card view
+    - _Requirements: 20.1, 20.2, 20.4, 20.6, 20.10, 20.11_
+
+  - [x] 15.9 Add the Board progress bar
+    - Pure `src/lib/boardProgress.ts` (`boardProgress`: Cards in Columns named exactly "Done" over all Cards, rounded, 0% for an empty Board), shared `components/shared/BaseProgressBar.tsx` (also used by `ChecklistProgress`), `components/board/BoardProgress.tsx`, placed at the right end of the Board title row in `BoardView`
+    - Computed from the loaded Board data; no endpoint, API type, or dependency
+    - _Requirements: 21.1, 21.2, 21.3, 21.4, 21.5, 21.6_
+
 - [x] 16. Teams UI
   - [x] 16.1 Implement Teams pages and join flow
     - `useTeams` hook, `/teams` (list and create), `/teams/[teamId]` (members; join-link create, list, revoke shown only when `currentUserTeamRole` is `team_admin`), `/join/[token]` (preview the Team name, call accept only after confirmation, one generic invalid-link message, login redirect and return)
@@ -534,7 +566,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Frontend (from `frontend/`): `npm run lint`, `npm run build`, `npx playwright test` (skip while no E2E specs exist)
     - Fix every failure, ask the user if questions arise, then commit with the checkpoint number in the message
 
-- [x] 19. Playwright end-to-end tests
+- [ ] 19. Playwright end-to-end tests
   - [x] 19.1 Create E2E fixtures and helpers
     - `frontend/e2e/fixtures.ts`: helpers that create unique users, Teams, Boards, Cards, and Invitation_Links through the API (and the seed script for baseline data) so every test sets up its own data against the dedicated E2E test database configured in `playwright.config.ts` (task 1.6); accessible locators first, `data-testid` only for draggable Cards, no `waitForTimeout`
     - _Requirements: 14.5_
@@ -574,6 +606,10 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
   - [x] 19.10 Write Profile E2E tests
     - `frontend/e2e/profile.spec.ts`: change the display name and see it in the app shell and on the Team members page, invalid (blank) name shows an inline error, change the password and stay logged in, log out and log in with the new password, the old password is rejected with the generic login error, a wrong current password shows the inline error, and `/profile` redirects to `/login` when logged out; every test creates its own user
     - _Requirements: 18.1, 18.2, 18.3, 18.5, 18.6, 18.7, 18.10, 18.11_
+
+  - [ ] 19.11 Write Board sidebar and in-Board search E2E tests
+    - `frontend/e2e/board-sidebar.spec.ts`: the sidebar links reach Activity, Analytics, and Board settings and the current page is marked; typing part of a Card title (for example "co" for "Fix this code" and "Review copy") lists exactly the matching Cards of that Board with their Column names, matching is case-insensitive, a Card of another Board never appears, no match shows the empty message, clearing the field clears the list, and selecting a result opens the Card details
+    - _Requirements: 19.1, 19.3, 19.4, 19.5, 19.6, 19.7_
 
 - [ ] 20. Documentation, production seed, and smoke test
   - [x] 20.1 Write the README
@@ -692,6 +728,8 @@ Sub-task numbers that implement or test each acceptance criterion.
 | R8.13 | 6.1, 12.5, 17.7 |
 | R8.14 | 5.2, 6.1, 6.3 |
 | R8.15 | 6.1, 6.2, 17.7 |
+| R8.16 | 6.4 |
+| R8.17 | 15.7 |
 | R9.1 | 12.2, 12.4, 17.7 |
 | R9.2 | 12.2, 12.4, 17.7 |
 | R9.3 | 12.2, 12.4, 17.7 |
@@ -707,6 +745,7 @@ Sub-task numbers that implement or test each acceptance criterion.
 | R10.7 | 5.2, 8.1, 8.6 |
 | R10.8 | 8.1, 8.3 |
 | R10.9 | 8.1, 8.6, 17.1 |
+| R10.10 | 8.1, 8.4, 8.6, 17.1 |
 | R11.1 | 2.2, 2.4, 8.2, 8.6, 11.4, 13.1, 17.1 |
 | R11.2 | 8.2, 8.6, 11.4, 17.1 |
 | R11.3 | 1.6, 11.3, 11.4, 11.5, 17.8, 19.8, 20.3 |
@@ -779,6 +818,32 @@ Sub-task numbers that implement or test each acceptance criterion.
 | R18.9 | 4.10, 4.11, 4.12, 15.5 |
 | R18.10 | 4.10, 4.11, 19.10 |
 | R18.11 | 15.5, 19.10 |
+| R21.1 | 15.9 |
+| R21.2 | 15.9 |
+| R21.3 | 15.9 |
+| R21.4 | 15.9 |
+| R21.5 | 15.9 |
+| R21.6 | 15.9 |
+| R19.1 | 15.6, 19.11 |
+| R19.2 | 15.6 |
+| R19.3 | 15.6, 19.11 |
+| R19.4 | 15.6, 19.11 |
+| R19.5 | 15.6, 19.11 |
+| R19.6 | 15.6, 19.11 |
+| R19.7 | 15.6, 19.11 |
+| R19.8 | 15.6 |
+| R19.9 | 15.6 |
+| R20.1 | 6.5, 15.8 |
+| R20.2 | 6.5, 15.8 |
+| R20.3 | 6.5 |
+| R20.4 | 6.5, 15.8 |
+| R20.5 | 6.5 |
+| R20.6 | 6.5, 15.8 |
+| R20.7 | 6.5 |
+| R20.8 | 6.5 |
+| R20.9 | 6.5 |
+| R20.10 | 6.5, 15.8 |
+| R20.11 | 15.8 |
 
 ## Property-to-Task Mapping
 
@@ -944,7 +1009,14 @@ Each design property maps to exactly one backend property test sub-task.
     { "id": 109, "tasks": ["20.3"] },
     { "id": 110, "tasks": ["20.4"] },
     { "id": 111, "tasks": ["20.5"] },
-    { "id": 112, "tasks": ["21.1"] }
+    { "id": 112, "tasks": ["21.1"] },
+    { "id": 113, "tasks": ["15.6"] },
+    { "id": 114, "tasks": ["19.11"] },
+    { "id": 115, "tasks": ["6.4"] },
+    { "id": 116, "tasks": ["15.7"] },
+    { "id": 117, "tasks": ["6.5"] },
+    { "id": 118, "tasks": ["15.8"] },
+    { "id": 119, "tasks": ["15.9"] }
   ]
 }
 ```

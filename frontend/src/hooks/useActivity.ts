@@ -8,7 +8,6 @@ import type { ActivityPage } from "@/types/api";
 
 interface UseActivityResult {
   activity: ActivityPage | null;
-  memberNames: Record<string, string>;
   page: number;
   isLoading: boolean;
   error: string | null;
@@ -23,7 +22,6 @@ export default function useActivity(boardId: string): UseActivityResult {
   const { showError } = useToast();
   const [page, setPage] = useState<number>(0);
   const [activity, setActivity] = useState<ActivityPage | null>(null);
-  const [memberNames, setMemberNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState<number>(0);
@@ -50,26 +48,6 @@ export default function useActivity(boardId: string): UseActivityResult {
     };
   }, [boardId, page, reloadKey, showError]);
 
-  useEffect(() => {
-    let isActive = true;
-    apiClient
-      .listBoardMembers(boardId)
-      .then((response) => {
-        if (!isActive) return;
-        const names: Record<string, string> = {};
-        for (const member of response.items) {
-          names[member.userId] = member.displayName;
-        }
-        setMemberNames(names);
-      })
-      .catch(() => {
-        // Names are optional; entries fall back to "Unknown user".
-      });
-    return () => {
-      isActive = false;
-    };
-  }, [boardId]);
-
   const reload = useCallback(() => {
     setIsLoading(true);
     setReloadKey((key) => key + 1);
@@ -90,7 +68,6 @@ export default function useActivity(boardId: string): UseActivityResult {
 
   return {
     activity,
-    memberNames,
     page,
     isLoading,
     error,

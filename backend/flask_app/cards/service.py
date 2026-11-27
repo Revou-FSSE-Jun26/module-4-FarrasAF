@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import select, update
 
 from flask_app.activity.service import record_activity
+from flask_app.checklist.service import checklist_item_dict
 from flask_app.common.exceptions import ConflictError, NotFoundError, ValidationError
 from flask_app.common.ordering import reindex
 from flask_app.common.time import utc_now
@@ -27,6 +28,10 @@ def _card_dict(card: Card) -> dict[str, Any]:
         "version": card.version,
         "created_at": card.created_at,
         "updated_at": card.updated_at,
+        "checklist_items": [
+            checklist_item_dict(item)
+            for item in card.checklist_items  # type: ignore[attr-defined]
+        ],
     }
 
 
@@ -83,7 +88,13 @@ def create_card_service(column_id: UUID, payload: dict[str, Any], user: User) ->
     )
     db.session.add(card)
     db.session.flush()
-    record_activity(column.board_id, user.id, "card_created", card.id)
+    record_activity(
+        column.board_id,
+        user.id,
+        "card_created",
+        card.id,
+        details={"card_title": card.title, "column_name": column.name},
+    )
     db.session.commit()
     return _card_dict(card)
 
@@ -109,7 +120,9 @@ def update_card_service(card_id: UUID, payload: dict[str, Any], user: User) -> d
     if result.rowcount == 0:  # type: ignore[attr-defined]
         raise ConflictError("Card was modified by someone else; reload and retry")
     db.session.refresh(card)
-    record_activity(card.board_id, user.id, "card_updated", card.id)
+    record_activity(
+        card.board_id, user.id, "card_updated", card.id, details={"card_title": card.title}
+    )
     db.session.commit()
     return _card_dict(card)
 
@@ -126,6 +139,8 @@ def move_card_service(
     if isinstance(target_index, bool) or not isinstance(target_index, int):
         raise ValidationError("Target index must be an integer", field="target_index")
     source_id = card.column_id
+    source = db.session.get(Column, source_id)
+    source_name = source.name if source is not None else ""
     # Lock affected Column rows in a stable order so concurrent moves cannot deadlock.
     column_ids = sorted({source_id, target_column_id})
     db.session.execute(
@@ -143,7 +158,17 @@ def move_card_service(
     card.updated_at = utc_now()
     reindex(source_cards)
     reindex(target_cards)
-    record_activity(card.board_id, actor.id, "card_moved", card.id)
+    record_activity(
+        card.board_id,
+        actor.id,
+        "card_moved",
+        card.id,
+        details={
+            "card_title": card.title,
+            "from_column_name": source_name,
+            "to_column_name": target.name,
+        },
+    )
     db.session.commit()
     return _card_dict(card)
 
@@ -151,9 +176,10 @@ def move_card_service(
 def delete_card_service(card_id: UUID, user: User) -> None:
     card = _get_card(card_id)
     board_id = card.board_id
+    card_title = card.title
     cards = _lock_column_cards(card.column_id)
     cards.remove(card)
     db.session.delete(card)
     reindex(cards)
-    record_activity(board_id, user.id, "card_deleted", card_id)
+    record_activity(board_id, user.id, "card_deleted", card_id, details={"card_title": card_title})
     db.session.commit()

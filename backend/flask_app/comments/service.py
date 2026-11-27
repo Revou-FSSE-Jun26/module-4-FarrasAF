@@ -108,7 +108,14 @@ def create_comment_service(card_id: UUID, payload: dict[str, Any], user: User) -
                     status="unread",
                 )
             )
-    record_activity(card.board_id, user.id, "comment_created", comment.id, card_id)
+    record_activity(
+        card.board_id,
+        user.id,
+        "comment_created",
+        comment.id,
+        card_id,
+        details={"card_title": card.title},
+    )
     db.session.commit()
     return _comment_dict(comment)
 
@@ -128,9 +135,15 @@ def update_comment_service(comment_id: UUID, payload: dict[str, Any], user: User
     if result.rowcount == 0:  # type: ignore[attr-defined]
         raise ConflictError("Comment was modified by someone else; reload and retry")
     db.session.refresh(comment)
-    board_id = db.session.scalar(select(Card.board_id).where(Card.id == comment.card_id))
-    assert board_id is not None
-    record_activity(board_id, user.id, "comment_edited", comment.id, comment.card_id)
+    card = _get_card(comment.card_id)
+    record_activity(
+        card.board_id,
+        user.id,
+        "comment_edited",
+        comment.id,
+        comment.card_id,
+        details={"card_title": card.title},
+    )
     db.session.commit()
     return _comment_dict(comment)
 
@@ -139,9 +152,15 @@ def delete_comment_service(comment_id: UUID, user: User) -> None:
     comment = _get_comment(comment_id)
     _require_author(comment, user)
     card_id = comment.card_id
-    board_id = db.session.scalar(select(Card.board_id).where(Card.id == card_id))
-    assert board_id is not None
+    card = _get_card(card_id)
     # Replies and their Notifications are removed by the database ON DELETE CASCADE.
     db.session.delete(comment)
-    record_activity(board_id, user.id, "comment_deleted", comment_id, card_id)
+    record_activity(
+        card.board_id,
+        user.id,
+        "comment_deleted",
+        comment_id,
+        card_id,
+        details={"card_title": card.title},
+    )
     db.session.commit()

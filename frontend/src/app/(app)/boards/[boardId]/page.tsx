@@ -1,10 +1,5 @@
 import BoardView from "@/components/board/BoardView";
 
-export default async function BoardDetailPage({
-  params,
-}: {
-  params: Promise<{ boardId: string }>;
-}) {
-  const { boardId } = await params;
-  return <BoardView boardId={boardId} />;
+export default function BoardDetailPage() {
+  return <BoardView />;
 }
