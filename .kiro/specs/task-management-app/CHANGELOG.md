@@ -2,6 +2,20 @@
 
 All notable changes to the task-management-app spec are documented here. Versions are ordered newest-first. The version is bumped each time a spec document (requirements.md, design.md, or tasks.md) is changed.
 
+## v27 - 2026-11-27 - "My Tasks" Board filter
+### Changes
+- **Specification changes:** requirements.md Requirement 19 gains 19.10 to 19.15: a "My Tasks" toggle in the Board sidebar that shows only Cards assigned to the current User (all Columns stay visible, empty ones say "No tasks assigned to you"); turning it on from Activity, Analytics, or Board settings opens the Board view with the filter on; while on, drag-and-drop and the add-Card form are off and a hint explains why; the sidebar search lists only the User's Cards; the filter is computed client-side from loaded data and is off after reload or when another Board opens. Requirement 21 gains 21.7: the progress bar counts only the User's Cards while the filter is on.
+- **Design changes:** design.md Frontend Structure gains a "My Tasks filter" bullet. No endpoint, data model, or property change.
+- **Implementation changes:** new `lib/myTasks.ts`; `BoardProvider`/context, `BoardSidebar`, `BoardView`, `BoardColumnView`, and `useDragAndDrop` updated. Task 15.11 added (completed), wave 121 appended, mapping rows R19.10 to R19.15 and R21.7.
+- **Bug fixes:** none.
+- **Breaking changes:** none.
+### Reason
+Request for a "My Tasks" sidebar item that filters the Board to the current User's Cards. Decisions confirmed with the user: toggle on the Board page, Columns stay visible, drag-and-drop disabled with a hint, add-Card form hidden, progress bar counts the User's Cards only, filter not persisted, search follows the filter.
+### Impact
+- Affected requirements: 19.10 to 19.15 and 21.7 added; 19.3 to 19.7 and 21.1 behave as before while the filter is off.
+- Affected design components: Frontend Structure.
+- Affected implementation tasks: 15.11 added. No E2E test written; task 19 stays open.
+
 ## v26 - 2026-11-27 - RevoTask visual redesign
 ### Changes
 - **Specification changes:** none. requirements.md is unchanged.

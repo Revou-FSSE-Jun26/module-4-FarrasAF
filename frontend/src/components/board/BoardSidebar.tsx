@@ -1,15 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import BaseInput from "@/components/shared/BaseInput";
 import useBoardContext from "@/hooks/useBoardContext";
 import { filterCardsByTitle } from "@/lib/boardSearch";
+import { filterColumnsByAssignee } from "@/lib/myTasks";
 
 export default function BoardSidebar() {
   const pathname = usePathname();
-  const { board, boardId, setOpenCardId } = useBoardContext();
+  const router = useRouter();
+  const {
+    board,
+    boardId,
+    setOpenCardId,
+    currentUserId,
+    isMyTasksOn,
+    setIsMyTasksOn,
+  } = useBoardContext();
   const [query, setQuery] = useState<string>("");
 
   const basePath = `/boards/${boardId}`;
@@ -19,7 +28,22 @@ export default function BoardSidebar() {
     { href: `${basePath}/analytics`, label: "Analytics" },
     { href: `${basePath}/settings`, label: "Board settings" },
   ];
-  const results = board ? filterCardsByTitle(board.columns, query) : [];
+  const searchColumns = board
+    ? isMyTasksOn
+      ? filterColumnsByAssignee(board.columns, currentUserId ?? "")
+      : board.columns
+    : [];
+  const results = filterCardsByTitle(searchColumns, query);
+
+  function handleMyTasksToggle() {
+    if (pathname === basePath) {
+      setIsMyTasksOn(!isMyTasksOn);
+      return;
+    }
+    // From Activity, Analytics, or settings: go to the Board with the filter on.
+    setIsMyTasksOn(true);
+    router.push(basePath);
+  }
   const hasQuery = query.trim().length > 0;
 
   return (
@@ -55,6 +79,19 @@ export default function BoardSidebar() {
               </Link>
             );
           })}
+          <button
+            type="button"
+            aria-pressed={isMyTasksOn}
+            disabled={!board || !currentUserId}
+            onClick={handleMyTasksToggle}
+            className={`rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#211621] disabled:cursor-not-allowed disabled:opacity-50 ${
+              isMyTasksOn
+                ? "border border-[#211621] bg-[#d9ff43] text-[#211621] shadow-[2px_2px_0_#211621]"
+                : "text-[#3f2548] hover:bg-[#fffdf7]/70 hover:text-[#211621]"
+            }`}
+          >
+            My Tasks
+          </button>
         </nav>
         <div className="flex flex-col gap-2">
           <BaseInput

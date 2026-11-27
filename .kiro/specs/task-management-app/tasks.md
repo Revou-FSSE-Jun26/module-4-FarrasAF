@@ -523,6 +523,13 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Appearance and copy only: no hook, API, route, type, or dependency change. E2E heading assertions in `auth.spec.ts` and `profile.spec.ts` updated to "Enter your workspace"
     - No requirement change
 
+  - [x] 15.11 Add the "My Tasks" Board filter
+    - Pure `src/lib/myTasks.ts` (`filterColumnsByAssignee(columns, userId)`); `BoardProvider` adds `isMyTasksOn`, `setIsMyTasksOn`, and `currentUserId` (from `useAuth`) to the Board context
+    - `BoardSidebar`: "My Tasks" toggle button (`aria-pressed`; from another Board page it turns the filter on and goes to the Board view); sidebar search runs over the filtered Columns
+    - `BoardView`: filtered Columns and progress bar, hint banner, no add-Card form, drag-and-drop disabled (`useDragAndDrop` gains `isDisabled`); `BoardColumnView` shows "No tasks assigned to you" for an empty Column while the filter is on
+    - No endpoint, API type, or dependency. No E2E test written; task 19 stays open
+    - _Requirements: 19.10, 19.11, 19.12, 19.13, 19.14, 19.15, 21.7_
+
 - [x] 16. Teams UI
   - [x] 16.1 Implement Teams pages and join flow
     - `useTeams` hook, `/teams` (list and create), `/teams/[teamId]` (members; join-link create, list, revoke shown only when `currentUserTeamRole` is `team_admin`), `/join/[token]` (preview the Team name, call accept only after confirmation, one generic invalid-link message, login redirect and return)
@@ -838,6 +845,13 @@ Sub-task numbers that implement or test each acceptance criterion.
 | R19.7 | 15.6, 19.11 |
 | R19.8 | 15.6 |
 | R19.9 | 15.6 |
+| R19.10 | 15.11 |
+| R19.11 | 15.11 |
+| R19.12 | 15.11 |
+| R19.13 | 15.11 |
+| R19.14 | 15.11 |
+| R19.15 | 15.11 |
+| R21.7 | 15.11 |
 | R20.1 | 6.5, 15.8 |
 | R20.2 | 6.5, 15.8 |
 | R20.3 | 6.5 |
@@ -1022,7 +1036,8 @@ Each design property maps to exactly one backend property test sub-task.
     { "id": 117, "tasks": ["6.5"] },
     { "id": 118, "tasks": ["15.8"] },
     { "id": 119, "tasks": ["15.9"] },
-    { "id": 120, "tasks": ["15.10"] }
+    { "id": 120, "tasks": ["15.10"] },
+    { "id": 121, "tasks": ["15.11"] }
   ]
 }
 ```
