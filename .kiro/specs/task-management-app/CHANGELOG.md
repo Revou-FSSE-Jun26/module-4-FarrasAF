@@ -2,6 +2,21 @@
 
 All notable changes to the task-management-app spec are documented here. Versions are ordered newest-first. The version is bumped each time a spec document (requirements.md, design.md, or tasks.md) is changed.
 
+## v28 - 2026-11-27 - Card attachments (Cloudinary)
+### Changes
+- **Specification changes:** requirements.md gains Requirement 22 (criteria 22.1 to 22.17) and the glossary terms "Attachment" and "Attachment_Service": Members and Admins upload one file at a time to a Card (jpg, jpeg, png, webp, pdf, docx, xlsx, pptx, txt, csv; 1 byte to 5 MB; at most 5 per Card); files are stored in Cloudinary and downloaded from the public URL; the uploader or an Admin deletes; Guests never see Attachments; upload and delete do not change the Card's version or Updated timestamp and create no Notification; Cloudinary cleanup on Card and Board deletion is best effort. Requirement 8 gains 8.18 and 8.19 (Activity events "attachment added" and "attachment deleted"). The Introduction no longer lists file attachments as a V1 exclusion.
+- **Steering changes (approved by the user):** `product.md` no longer lists "File attachments" under Non-Goals and lists Card attachments under Core Features; `tech.md` adds Cloudinary as the one file store and the `cloudinary` package as the one approved dependency outside the earlier stack, and the matching constraints; `structure.md` adds the `attachments/` module and `common/storage.py`.
+- **Design changes:** design.md gains the Cloudinary entry in the Technology Stack, an Attachment_Service row, the `Attachment` entity, the two event types in `ActivityEntry`, two endpoints (`POST /api/cards/{cardId}/attachments`, `DELETE /api/attachments/{attachmentId}`), the `Attachment` response schema, `attachments` on the Card schema, and a Frontend Structure bullet. No new correctness property: the rules are covered by unit and API tests.
+- **Implementation changes:** see tasks 6.6 (backend), 15.12 (frontend), and 19.12 (E2E, not started), plus waves 122 to 124 and the mapping rows for R8.18, R8.19, and R22.1 to R22.17.
+- **Bug fixes:** none.
+- **Breaking changes:** none. Card responses gain an `attachments` array; Guest responses are unchanged.
+### Reason
+Request to let a User upload a file on the Card details that other Board members can download, using Cloudinary as suggested by the mentor. Decisions confirmed with the user: upload goes through Flask (same-origin, no CORS), 5 MB limit, the file types above, 5 files per Card, any Member uploads, only the uploader and Admins delete, Guests cannot see Attachments, public Cloudinary URLs, and Activity entries for upload and delete. The extension "XLXS" in the request was read as "XLSX".
+### Impact
+- Affected requirements: Requirement 22 added; 8.18 and 8.19 added; Introduction and Glossary updated.
+- Affected design components: Technology Stack, service table, Data Models (Attachment, ActivityEntry), API Design (Card_Service table), API Response Schemas (Card, Attachment, ActivityEntry details), Frontend Structure.
+- Affected implementation tasks: 6.6, 15.12, and 19.12 added; task 19 stays open.
+
 ## v27 - 2026-11-27 - "My Tasks" Board filter
 ### Changes
 - **Specification changes:** requirements.md Requirement 19 gains 19.10 to 19.15: a "My Tasks" toggle in the Board sidebar that shows only Cards assigned to the current User (all Columns stay visible, empty ones say "No tasks assigned to you"); turning it on from Activity, Analytics, or Board settings opens the Board view with the filter on; while on, drag-and-drop and the add-Card form are off and a hint explains why; the sidebar search lists only the User's Cards; the filter is computed client-side from loaded data and is off after reload or when another Board opens. Requirement 21 gains 21.7: the progress bar counts only the User's Cards while the filter is on.

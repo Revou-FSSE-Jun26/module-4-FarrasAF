@@ -34,4 +34,9 @@ def load_config() -> dict[str, Any]:
         "REFRESH_TOKEN_DAYS": int(os.environ.get("REFRESH_TOKEN_DAYS", "7")),
         "ACCESS_COOKIE_NAME": os.environ.get("ACCESS_COOKIE_NAME", "access_token"),
         "REFRESH_COOKIE_NAME": os.environ.get("REFRESH_COOKIE_NAME", "refresh_token"),
+        "CLOUDINARY_CLOUD_NAME": _required("CLOUDINARY_CLOUD_NAME"),
+        "CLOUDINARY_API_KEY": _required("CLOUDINARY_API_KEY"),
+        "CLOUDINARY_API_SECRET": _required("CLOUDINARY_API_SECRET"),
+        # Safety net above the 5 MB attachment limit (which gives a friendly error).
+        "MAX_CONTENT_LENGTH": 10 * 1024 * 1024,
     }

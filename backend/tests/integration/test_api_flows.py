@@ -310,3 +310,90 @@ def test_checklist_items_are_member_writable_guest_readable_and_in_card_payloads
 
     assert admin_client.delete(f"/api/checklist-items/{item['id']}").status_code == 204
     assert admin_client.get(f"/api/cards/{card.id}").get_json()["checklistItems"] == []
+
+
+def test_attachments_upload_permissions_limits_and_guest_isolation(
+    db_session: Any,
+    client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+    make_session: Callable[[], tuple[FlaskClient, User]],
+    make_board: MakeBoard,
+    make_column: MakeColumn,
+    make_card: MakeCard,
+) -> None:
+    """R22: members upload, only the uploader or an Admin deletes, Guests see nothing."""
+    from io import BytesIO
+
+    from flask_app.attachments import service as attachments_service
+    from flask_app.common.storage import StoredFile
+
+    deleted: list[str] = []
+
+    def fake_upload(data: bytes, folder: str, public_id: str, resource_type: str) -> StoredFile:
+        full = f"{folder}/{public_id}"
+        return StoredFile(
+            full, f"https://res.cloudinary.com/x/{resource_type}/upload/v1/{full}", resource_type
+        )
+
+    monkeypatch.setattr(attachments_service, "upload_file", fake_upload)
+    monkeypatch.setattr(attachments_service, "delete_file", lambda pid, rt: deleted.append(pid))
+
+    admin_client, admin = make_session()
+    member_client, member = make_session()
+    other_client, other = make_session()
+    outsider, _ = make_session()
+    board = make_board(admin=admin)
+    _join(db_session, board, member, "member")
+    _join(db_session, board, other, "member")
+    card = make_card(column=make_column(board=board), title="Task", created_by=admin)
+    url = f"/api/cards/{card.id}/attachments"
+
+    def upload(c: FlaskClient, name: str = "plan.pdf", size: int = 10) -> Any:
+        return c.post(
+            url,
+            data={"file": (BytesIO(b"x" * size), name)},
+            content_type="multipart/form-data",
+        )
+
+    created = upload(member_client)
+    assert created.status_code == 201, created.get_json()
+    attachment = created.get_json()
+    assert attachment["fileName"] == "plan.pdf"
+    assert attachment["uploadedBy"]["id"] == str(member.id)
+
+    # Authentication first, then the Board role.
+    assert upload(client).status_code == 401
+    assert upload(outsider).status_code == 403
+
+    # Validation errors use the normal envelope.
+    bad_type = upload(member_client, "run.exe")
+    assert bad_type.status_code == 400 and bad_type.get_json()["error"]["field"] == "file"
+    assert upload(member_client, "big.pdf", 5 * 1024 * 1024 + 1).status_code == 400
+    no_file = member_client.post(url, data={}, content_type="multipart/form-data")
+    assert no_file.status_code == 400
+
+    # The Card and Board payloads carry the Attachment.
+    assert (
+        admin_client.get(f"/api/cards/{card.id}").get_json()["attachments"][0]["id"]
+        == (attachment["id"])
+    )
+    columns = admin_client.get(f"/api/boards/{board.id}").get_json()["columns"]
+    assert columns[0]["cards"][0]["attachments"][0]["fileName"] == "plan.pdf"
+
+    # Guests never see Attachments.
+    token = admin_client.post(f"/api/boards/{board.id}/invitations").get_json()["token"]
+    guest_card = client.get(f"/api/guest/{token}/board").get_json()["columns"][0]["cards"][0]
+    assert "attachments" not in guest_card
+    assert client.delete(f"/api/attachments/{attachment['id']}").status_code == 401
+
+    # Delete: another Member and an outsider are rejected; an Admin and the uploader succeed.
+    assert other_client.delete(f"/api/attachments/{attachment['id']}").status_code == 403
+    assert outsider.delete(f"/api/attachments/{attachment['id']}").status_code == 403
+    assert admin_client.delete(f"/api/attachments/{attachment['id']}").status_code == 204
+    assert len(deleted) == 1
+    again = upload(member_client).get_json()
+    assert member_client.delete(f"/api/attachments/{again['id']}").status_code == 204
+    assert admin_client.get(f"/api/cards/{card.id}").get_json()["attachments"] == []
+
+    events = admin_client.get(f"/api/boards/{board.id}/activity").get_json()["items"]
+    assert {e["eventType"] for e in events} >= {"attachment_added", "attachment_deleted"}

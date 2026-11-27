@@ -44,5 +44,9 @@ export function describeActivity(entry: ActivityEntry): string {
       return d.memberName
         ? `${who} removed ${d.memberName} from the board`
         : `${who} removed a member from the board`;
+    case "attachment_added":
+      return `${who} attached${quoted(d.fileName)} to the card${quoted(d.cardTitle)}`;
+    case "attachment_deleted":
+      return `${who} deleted the attachment${quoted(d.fileName)} from the card${quoted(d.cardTitle)}`;
   }
 }

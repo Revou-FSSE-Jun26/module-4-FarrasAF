@@ -11,6 +11,7 @@ import type {
   ChangeBoardMemberRoleRequest,
   ChangePasswordRequest,
   ChecklistItem,
+  Attachment,
   Column,
   Comment,
   CreateBoardRequest,
@@ -140,7 +141,10 @@ async function send(
   body?: unknown,
 ): Promise<Response> {
   const init: RequestInit = { method, credentials: "same-origin" };
-  if (body !== undefined) {
+  if (body instanceof FormData) {
+    // No Content-Type header: the browser adds the multipart boundary itself.
+    init.body = body;
+  } else if (body !== undefined) {
     init.headers = { "Content-Type": "application/json" };
     init.body = JSON.stringify(body);
   }
@@ -287,6 +291,17 @@ export const apiClient = {
     ),
   deleteChecklistItem: (itemId: string) =>
     request<void>("DELETE", `/api/checklist-items/${enc(itemId)}`),
+  uploadAttachment: (cardId: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return request<Attachment>(
+      "POST",
+      `/api/cards/${enc(cardId)}/attachments`,
+      body,
+    );
+  },
+  deleteAttachment: (attachmentId: string) =>
+    request<void>("DELETE", `/api/attachments/${enc(attachmentId)}`),
   updateComment: (commentId: string, body: UpdateCommentRequest) =>
     request<Comment>("PATCH", `/api/comments/${enc(commentId)}`, body),
   deleteComment: (commentId: string) =>

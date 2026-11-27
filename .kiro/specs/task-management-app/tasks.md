@@ -23,7 +23,7 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
 - All 40 correctness properties map to exactly one backend property test sub-task: P1 9.2, P2 10.5, P3 10.6, P4 10.7, P5 7.3, P6 10.3, P7 11.12, P8 10.4, P9 9.3, P10 7.4, P11 11.9, P12 11.8, P13 11.6, P14 11.7, P15 1.4, P16 12.3, P17 12.5, P18 6.2, P19 12.4, P20 11.11, P21 5.2, P22 4.8, P23 8.4, P24 8.5, P25 11.4, P26 4.3, P27 4.4, P28 4.5, P29 4.6, P30 4.7, P31 5.4, P32 7.2, P33 8.3, P34 5.5, P35 10.8, P36 6.3, P37 7.5, P38 7.6, P39 11.10, P40 4.12. The same mapping is repeated as a table at the end of this file.
 - Properties 31 to 34, 37, 38, and 40 run against the transactional test database with small generators; pure-logic properties run without the database.
 - Load/p95 (R14.1) and availability (R14.2) are design targets validated outside this task list; only the health endpoint and responsive layout are implemented and tested here.
-- Do not add dependencies outside the `tech.md` stack, Docker, WebSockets, or Supabase client libraries.
+- Do not add dependencies outside the `tech.md` stack, Docker, WebSockets, or Supabase client libraries. The one approved addition is the `cloudinary` Python package for Card Attachments (spec v28).
 
 ## Tasks
 
@@ -224,6 +224,13 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Model `ChecklistItem` (`checklist_items`, FK to `cards` with `ON DELETE CASCADE`), new migration `d5e6f7a8b9c0`, `Card.checklist_items` (`selectin`); new `checklist/` module (`routes.py`, `schema.py`, `service.py`, `__init__.py`) with `POST /api/cards/{cardId}/checklist-items`, `PATCH` and `DELETE /api/checklist-items/{itemId}` for Members and Admins (`@require_role('member')`; `rbac.py` resolves the Board from `item_id`); at most 50 items, locked Card row on add, no Card `version` change, no Activity entry; Card and Guest Board responses embed `checklistItems`; `openapi.yaml` updated
     - Tests: `tests/unit/test_checklist.py`, and an API flow in `tests/integration/test_api_flows.py` (outsider rejected, Guest read-only, items in Card and Board payloads)
     - _Requirements: 20.1, 20.2, 20.3, 20.4, 20.5, 20.6, 20.7, 20.8, 20.9, 20.10_
+
+  - [x] 6.6 Implement Card attachments backend (Cloudinary)
+    - Add `cloudinary` to `requirements.txt` (pinned) and the three `CLOUDINARY_*` settings to `config.py` (required) and `.env.example`; `common/storage.py` (`upload_file`, `delete_file`, the only module importing `cloudinary`); `common/serialization.py` gains `read_multipart_file()` for one `file` field
+    - Model `Attachment` (`attachments`, FK `cards` with `ON DELETE CASCADE`, FK `users`), `Card.attachments` (`selectin`), two new migrations (table, then the `attachment_added` and `attachment_deleted` event types in the `event_type` check constraint), `EVENT_TYPES` updated
+    - New `attachments/` module (`routes.py`, `service.py`, `__init__.py`; no `schema.py`, because the only body is the multipart file) with `POST /api/cards/{cardId}/attachments` and `DELETE /api/attachments/{attachmentId}` (`@require_role('member')`; delete allowed to the uploader or an Admin; `rbac.py` resolves the Board from `attachment_id`); pure `validate_upload`; locked Card row on upload; Activity entries in the same transaction; Cloudinary cleanup on commit failure, on Card delete, and on Board delete (best effort); `attachments` embedded in Card and Board responses, never in Guest responses; `openapi.yaml` updated
+    - Tests: `tests/unit/test_attachments.py` with `common/storage.py` replaced by a fake, and an API flow in `tests/integration/test_api_flows.py` (outsider and Guest rejected, non-uploader Member rejected, Admin can delete, type, size, and count limits, no attachments in the Guest payload)
+    - _Requirements: 22.1, 22.2, 22.3, 22.4, 22.5, 22.6, 22.7, 22.8, 22.9, 22.10, 22.11, 22.12, 22.13, 22.14, 22.15, 22.17, 8.18, 8.19_
 
   - [x] 6.2 Write property test for Activity pagination
     - File: `tests/properties/test_property_18_activity_pagination.py`
@@ -530,6 +537,11 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - No endpoint, API type, or dependency. No E2E test written; task 19 stays open
     - _Requirements: 19.10, 19.11, 19.12, 19.13, 19.14, 19.15, 21.7_
 
+  - [x] 15.12 Add the Card attachments UI
+    - `src/types/api.ts` (`Attachment`, `Card.attachments`), `apiClient.uploadAttachment` (`FormData`, no `Content-Type` header) and `deleteAttachment`, pure `src/lib/attachments.ts` (`validateAttachmentFile`, `formatFileSize`), `useAttachments`, `AttachmentSection` and `AttachmentRow` under `src/components/card/`, integrated into `CardDetailModal`; `lib/activityText.ts` gains the two attachment sentences
+    - Upload controls only for Members and Admins and hidden at 5 Attachments; Delete only for the uploader or an Admin; loading, empty, and error states; no section on the Guest page
+    - _Requirements: 22.6, 22.7, 22.11, 22.16, 8.18, 8.19_
+
 - [x] 16. Teams UI
   - [x] 16.1 Implement Teams pages and join flow
     - `useTeams` hook, `/teams` (list and create), `/teams/[teamId]` (members; join-link create, list, revoke shown only when `currentUserTeamRole` is `team_admin`), `/join/[token]` (preview the Team name, call accept only after confirmation, one generic invalid-link message, login redirect and return)
@@ -622,6 +634,10 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
   - [ ] 19.11 Write Board sidebar and in-Board search E2E tests
     - `frontend/e2e/board-sidebar.spec.ts`: the sidebar links reach Activity, Analytics, and Board settings and the current page is marked; typing part of a Card title (for example "co" for "Fix this code" and "Review copy") lists exactly the matching Cards of that Board with their Column names, matching is case-insensitive, a Card of another Board never appears, no match shows the empty message, clearing the field clears the list, and selecting a result opens the Card details
     - _Requirements: 19.1, 19.3, 19.4, 19.5, 19.6, 19.7_
+
+  - [ ] 19.12 Write Card attachments E2E tests
+    - `frontend/e2e/attachments.spec.ts`: a Member uploads an allowed file and a second Member sees and can open the download link, a disallowed type and an oversized file show an error, the sixth upload is blocked, only the uploader and an Admin see Delete, and the Guest page shows no Attachments; Cloudinary access (a test account or a stub) must be decided before writing this test
+    - _Requirements: 22.1, 22.3, 22.4, 22.5, 22.9, 22.11, 22.16_
 
 - [ ] 20. Documentation, production seed, and smoke test
   - [x] 20.1 Write the README
@@ -863,6 +879,25 @@ Sub-task numbers that implement or test each acceptance criterion.
 | R20.9 | 6.5 |
 | R20.10 | 6.5, 15.8 |
 | R20.11 | 15.8 |
+| R8.18 | 6.6, 15.12 |
+| R8.19 | 6.6, 15.12 |
+| R22.1 | 6.6, 19.12 |
+| R22.2 | 6.6 |
+| R22.3 | 6.6, 19.12 |
+| R22.4 | 6.6, 19.12 |
+| R22.5 | 6.6, 19.12 |
+| R22.6 | 6.6, 15.12 |
+| R22.7 | 6.6, 15.12 |
+| R22.8 | 6.6 |
+| R22.9 | 6.6, 19.12 |
+| R22.10 | 6.6 |
+| R22.11 | 6.6, 15.12, 19.12 |
+| R22.12 | 6.6 |
+| R22.13 | 6.6 |
+| R22.14 | 6.6 |
+| R22.15 | 6.6 |
+| R22.16 | 15.12, 19.12 |
+| R22.17 | 6.6 |
 
 ## Property-to-Task Mapping
 
@@ -1037,7 +1072,10 @@ Each design property maps to exactly one backend property test sub-task.
     { "id": 118, "tasks": ["15.8"] },
     { "id": 119, "tasks": ["15.9"] },
     { "id": 120, "tasks": ["15.10"] },
-    { "id": 121, "tasks": ["15.11"] }
+    { "id": 121, "tasks": ["15.11"] },
+    { "id": 122, "tasks": ["6.6"] },
+    { "id": 123, "tasks": ["15.12"] },
+    { "id": 124, "tasks": ["19.12"] }
   ]
 }
 ```

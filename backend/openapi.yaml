@@ -623,6 +623,53 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ---------------------------------------------------------------- Attachments
+  /api/cards/{cardId}/attachments:
+    post:
+      tags: [Cards]
+      summary: Upload a file to a Card (Member or Admin)
+      description: |
+        Send one file in the `file` field of a `multipart/form-data` body. Allowed types: jpg, jpeg, png, webp,
+        pdf, docx, xlsx, pptx, txt, csv. The file must be 1 byte to 5 MB, and a Card can have at most 5
+        attachments. The file is stored in Cloudinary. The Card's `version` and `updatedAt` do not change; an
+        `attachment_added` Activity entry is recorded.
+      parameters:
+        - $ref: "#/components/parameters/CardId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Created attachment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/attachments/{attachmentId}:
+    delete:
+      tags: [Cards]
+      summary: Delete an attachment (its uploader or a Board Admin)
+      description: Records an `attachment_deleted` Activity entry and removes the file from Cloudinary (best effort).
+      parameters:
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ---------------------------------------------------------------- Comments
   /api/cards/{cardId}/comments:
     parameters:
@@ -1239,7 +1286,7 @@ components:
         dueDate: { type: string, format: date, nullable: true }
     Card:
       type: object
-      required: [id, columnId, boardId, title, description, assigneeId, dueDate, createdById, orderIndex, version, createdAt, updatedAt, checklistItems]
+      required: [id, columnId, boardId, title, description, assigneeId, dueDate, createdById, orderIndex, version, createdAt, updatedAt, checklistItems, attachments]
       properties:
         id: { type: string, format: uuid }
         columnId: { type: string, format: uuid }
@@ -1256,6 +1303,10 @@ components:
         checklistItems:
           type: array
           items: { $ref: "#/components/schemas/ChecklistItem" }
+        attachments:
+          type: array
+          description: In upload order. Never included in Guest responses.
+          items: { $ref: "#/components/schemas/Attachment" }
     ChecklistItem:
       type: object
       required: [id, cardId, text, isDone, orderIndex, createdAt]
@@ -1265,6 +1316,24 @@ components:
         text: { type: string, minLength: 1, maxLength: 255 }
         isDone: { type: boolean }
         orderIndex: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+    Attachment:
+      type: object
+      required: [id, cardId, fileName, contentType, sizeBytes, url, downloadUrl, uploadedBy, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        cardId: { type: string, format: uuid }
+        fileName: { type: string, minLength: 1, maxLength: 255 }
+        contentType: { type: string }
+        sizeBytes: { type: integer, minimum: 1, maximum: 5242880 }
+        url: { type: string, format: uri, description: Public Cloudinary URL. }
+        downloadUrl: { type: string, format: uri, description: Same file; for images the URL forces a download. }
+        uploadedBy:
+          type: object
+          required: [id, displayName]
+          properties:
+            id: { type: string, format: uuid }
+            displayName: { type: string }
         createdAt: { type: string, format: date-time }
     SearchResult:
       type: object
@@ -1364,6 +1433,8 @@ components:
             - column_deleted
             - member_joined
             - member_removed
+            - attachment_added
+            - attachment_deleted
         resourceId: { type: string, format: uuid }
         secondaryResourceId: { type: string, format: uuid, nullable: true }
         details:
@@ -1376,6 +1447,7 @@ components:
             fromColumnName: { type: string }
             toColumnName: { type: string }
             memberName: { type: string }
+            fileName: { type: string }
         createdAt: { type: string, format: date-time }
 
     Analytics:
