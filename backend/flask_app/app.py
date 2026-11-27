@@ -9,6 +9,7 @@ from flask_app.analytics import analytics_bp
 from flask_app.auth import auth_bp
 from flask_app.boards import boards_bp
 from flask_app.cards import cards_bp
+from flask_app.checklist import checklist_bp
 from flask_app.columns import columns_bp
 from flask_app.comments import comments_bp
 from flask_app.common.docs import docs_bp
@@ -77,6 +78,7 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
     app.register_blueprint(boards_bp)
     app.register_blueprint(columns_bp)
     app.register_blueprint(cards_bp)
+    app.register_blueprint(checklist_bp)
     app.register_blueprint(comments_bp)
     app.register_blueprint(activity_bp)
     app.register_blueprint(access_bp)

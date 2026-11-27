@@ -87,7 +87,9 @@ def add_member_service(board_id: UUID, payload: dict[str, Any], actor: User) -> 
         raise ValidationError("User is already a Member of the Board", field="user_id")
     membership = BoardMembership(board_id=board_id, user_id=user_id, role=payload["role"])
     db.session.add(membership)
-    record_activity(board_id, actor.id, "member_joined", user_id)
+    record_activity(
+        board_id, actor.id, "member_joined", user_id, details={"member_name": user.display_name}
+    )
     db.session.commit()
     return _member_to_dict(membership, user.display_name)
 
@@ -108,13 +110,16 @@ def change_member_role_service(
 
 
 def remove_member_service(board_id: UUID, user_id: UUID, actor: User) -> None:
-    """Remove a member, never leaving the Board without an Admin."""
+    """Remove a Board member whose role is Member; an Admin cannot be removed (R10.10)."""
     _lock_board(board_id)
     membership = _get_membership(board_id, user_id)
-    if membership.role == "admin" and _admin_count(board_id) <= 1:
-        raise ValidationError("The Board must retain at least one Admin")
+    if membership.role == "admin":
+        raise ValidationError("An Admin cannot be removed; change the role to Member first")
+    member_name = membership.user.display_name
     db.session.delete(membership)
-    record_activity(board_id, actor.id, "member_removed", user_id)
+    record_activity(
+        board_id, actor.id, "member_removed", user_id, details={"member_name": member_name}
+    )
     db.session.commit()
 
 
@@ -190,6 +195,10 @@ def guest_board_service(token: str) -> dict[str, Any]:
                 "order_index": card.order_index,
                 "created_at": card.created_at,
                 "updated_at": card.updated_at,
+                "checklist_items": [
+                    {"id": item.id, "text": item.text, "is_done": item.is_done}
+                    for item in card.checklist_items  # type: ignore[attr-defined]
+                ],
             }
         )
     return {

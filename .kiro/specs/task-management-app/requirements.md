@@ -45,6 +45,7 @@ The application targets clear visibility into task progress, task ownership, and
 - **Team_Admin**: The Team_Role held by the User who created the Team; permits generating and revoking Team_Join_Links.
 - **Team_Role**: The role of a Team_Member within a Team, either Team_Admin or Team_Regular. Distinct from Board roles.
 - **Team_Join_Link**: A shareable token that lets an authenticated User become a Team_Member of a specific Team while the link is active and unexpired.
+- **To-do item**: A short text with a done or not done status, belonging to the single to-do list of a Card.
 
 ## Requirements
 
@@ -181,6 +182,8 @@ The application targets clear visibility into task progress, task ownership, and
 13. WHEN THE Activity_Service returns an Activity_Entry, THE Activity_Service SHALL include the event type, the timestamp, the acting User's identity, and the affected resource identifier.
 14. IF a request to retrieve a Board's activity history is submitted by a requester who does not hold the Member or Admin role on that Board, including a Guest, THEN THE Access_Control_Service SHALL reject the request with an authorization error and SHALL return no Activity_Entries.
 15. IF a Member requests a page of the activity history with a page index that is negative or that exceeds the index of the last available page, THEN THE Activity_Service SHALL return an empty page of Activity_Entries.
+16. WHEN THE Activity_Service records an Activity_Entry, THE Activity_Service SHALL also store, in the same transaction, the names needed to describe the event in a sentence: the Card Title for Card and Comment events, the Column name for Column events and for a created Card, the source and target Column names for a Card move, and the display name of the affected User for member events; WHEN THE Activity_Service returns an Activity_Entry, THE Activity_Service SHALL include the acting User's identity and display name and these stored names, and for an Activity_Entry recorded before the names were stored THE Activity_Service SHALL return no names.
+17. WHEN THE System shows an Activity_Entry, THE System SHALL show a sentence that starts with the acting User's display name and describes the event using the stored names, for example `Ada moved the card "Fix login" from "To Do" to "Doing"`, and for an entry without stored names SHALL show a shorter sentence without them.
 
 ### Requirement 9: Board Analytics
 
@@ -206,10 +209,11 @@ The application targets clear visibility into task progress, task ownership, and
 3. WHEN an Admin changes a Member's role on a Board, THE Access_Control_Service SHALL apply the permissions of the new role to every request the Member submits after the change.
 4. IF an Admin submits a member invitation request specifying a role that is neither Member nor Admin, THEN THE Access_Control_Service SHALL reject the request with a validation error indicating the role is invalid and SHALL leave Board membership unchanged.
 5. IF an Admin submits a member invitation request for a User who is already a Member of the Board, THEN THE Access_Control_Service SHALL reject the request with a validation error indicating the User is already a Member and SHALL leave Board membership unchanged.
-6. IF an Admin submits a member removal or role change request that would leave the Board with zero Admins, THEN THE Access_Control_Service SHALL reject the request with a validation error indicating the Board must retain at least one Admin and SHALL leave Board membership unchanged.
+6. IF an Admin submits a role change request that would leave the Board with zero Admins, THEN THE Access_Control_Service SHALL reject the request with a validation error indicating the Board must retain at least one Admin and SHALL leave Board membership unchanged.
 7. IF a User without the Admin role submits a member invitation, removal, or role change request, THEN THE Access_Control_Service SHALL reject the request with an authorization error and SHALL leave Board membership unchanged.
 8. IF an Admin submits a member invitation request for a User who is not a Team_Member of the Board's Team, THEN THE Access_Control_Service SHALL reject the request with a validation error indicating the User is not a Team_Member and SHALL leave Board membership unchanged.
 9. WHEN a Member or Admin requests the members of a Board, THE Access_Control_Service SHALL return each Board member's User identifier, display name, and Board role.
+10. IF an Admin submits a removal request for a Board member whose Board role is Admin, including the requesting Admin, THEN THE Access_Control_Service SHALL reject the request with a validation error indicating that an Admin cannot be removed and that the role must be changed to Member first, and SHALL leave Board membership unchanged; WHILE a Board member's role is Admin, THE System SHALL NOT offer a remove action for that member in Board settings.
 
 ### Requirement 11: Invitation Links and Guest Access
 
@@ -338,3 +342,50 @@ The application targets clear visibility into task progress, task ownership, and
 9. IF an authenticated User submits a password change whose new password is shorter than 8 characters or is identical to the current password, THEN THE Authentication_Service SHALL reject the request with a validation error indicating the invalid new password, SHALL leave the password and all tokens unchanged, and SHALL NOT count the request as a failed login attempt; a new password shorter than 8 characters SHALL be rejected before the current password is verified.
 10. IF an unauthenticated User submits a request to view or update a Profile or to change a password, THEN THE Authentication_Service SHALL reject the request with an authentication error and SHALL leave all accounts unchanged.
 11. THE System SHALL provide a profile page, reachable from the primary navigation by authenticated Users, on which the User sees the email address as read-only text, edits the display name, and changes the password; and a successful password change SHALL leave the User logged in.
+
+### Requirement 19: Board Navigation Sidebar and In-Board Card Search
+
+**User Story:** As a Member, I want a sidebar on every Board page with links to the Board's pages and a search box for that Board's Cards, so that I can move between the Board views and find a Card without leaving the Board.
+
+#### Acceptance Criteria
+
+1. WHEN a User opens a Board page (the Board view, Activity, Analytics, or Board settings), THE System SHALL show a sidebar on that page with links to the Board view, Activity, Analytics, and Board settings of that Board and SHALL mark the link of the current page as the current page.
+2. THE System SHALL NOT show the Activity, Analytics, and Board settings links anywhere on the Board view other than the sidebar.
+3. THE sidebar SHALL contain a search field that searches the Cards of that Board only.
+4. WHEN a User types in the sidebar search field, THE System SHALL update the list of matching Cards after each change of the typed text, without a submit action, and SHALL list every Card of that Board whose Title contains the typed text, after trimming leading and trailing whitespace, as a case-insensitive substring.
+5. WHEN the sidebar search list shows a Card, THE System SHALL show the Card's Title and the name of the Column that holds it.
+6. WHEN a User selects a Card in the sidebar search list, THE System SHALL open the details of that Card.
+7. IF no Card of the Board matches the typed text, THEN THE System SHALL show a message that no Cards match; IF the search field is empty after trimming, THEN THE System SHALL show no search results.
+8. THE System SHALL compute the in-Board search results from the Board data already loaded for the page, without a separate Card search request, and Requirement 7 (Card Search across accessible Boards) SHALL remain unchanged.
+9. WHERE a client viewport width is less than 1024 pixels, THE System SHALL place the sidebar above the page content with no overlapping content and no horizontal page scrolling, consistent with Requirement 14.4.
+
+### Requirement 20: Card To-Do List and Progress
+
+**User Story:** As a Member, I want a to-do list on a Card with a progress bar, so that I can break a task into steps and see how much is done.
+
+#### Acceptance Criteria
+
+1. WHEN a Member or Admin submits a to-do item with text of 1 to 255 characters after trimming leading and trailing whitespace for a Card that has fewer than 50 to-do items, THE Card_Service SHALL add the item as the last item of that Card's single to-do list, with the status not done.
+2. WHEN a Member or Admin changes the text of a to-do item to a value of 1 to 255 characters after trimming, THE Card_Service SHALL persist the new text and leave the done status unchanged.
+3. IF a Member or Admin adds an item to a Card that already has 50 to-do items, THEN THE Card_Service SHALL reject the request with a validation error and SHALL leave the to-do list unchanged.
+4. WHEN a Member or Admin marks a to-do item as done or not done, THE Card_Service SHALL persist the status and leave the text unchanged.
+5. IF a Member or Admin submits to-do text that is empty after trimming or exceeds 255 characters, or an item change that contains neither text nor a status, THEN THE Card_Service SHALL reject the request with a validation error and SHALL leave the to-do list unchanged.
+6. WHEN a Member or Admin deletes a to-do item, THE Card_Service SHALL delete that item and leave the other items and their order unchanged.
+7. WHEN a Card is deleted or its Board is permanently deleted, THE System SHALL delete the Card's to-do items with it.
+8. IF a Guest, a User without a role on the Card's Board, or an unauthenticated requester submits a request to add, change, or delete a to-do item, THEN THE System SHALL reject the request with an authorization or authentication error and SHALL leave the to-do list unchanged.
+9. WHEN a to-do item is added, changed, or deleted, THE System SHALL NOT change the Card's version identifier or Updated timestamp, SHALL NOT record an Activity_Entry, and SHALL NOT create a Notification.
+10. WHEN THE System returns a Card, THE System SHALL include the Card's to-do items in the order they were added, each with its text and done status; WHEN a Guest views a Card through an active Invitation_Link, THE System SHALL include the same items, read-only.
+11. WHILE a Card has at least one to-do item, THE System SHALL show on the Card details a progress bar at the top right, in the same row as the Title, filled to the number of done items divided by the number of items, shown as a whole-number percentage rounded to the nearest whole percent (for example 3 done of 5 shows 60%), and SHALL update it after each change; WHILE a Card has no to-do items, THE System SHALL show no progress bar.
+
+### Requirement 21: Board Progress Bar
+
+**User Story:** As a Member, I want a progress bar on the Board page, so that I can see how much of the Board's work is done.
+
+#### Acceptance Criteria
+
+1. WHEN a User opens the Board view, THE System SHALL show a progress bar at the top right of the page, in the same row as the Board title, filled to the number of Cards in Columns named exactly "Done" divided by the total number of Cards on the Board, and SHALL show that percentage as a whole number rounded to the nearest whole percent (for example 6 Cards in "Done" out of 10 Cards shows 60%).
+2. WHEN the Board has more than one Column named exactly "Done", THE System SHALL count the Cards of all of them, consistent with Requirement 9.3.
+3. IF the Board has no Cards, THEN THE System SHALL show the progress bar at 0%.
+4. WHEN a Card is created, deleted, or moved, or a Column is renamed, added, or deleted, THE System SHALL update the progress bar to match the Board data shown on the page.
+5. THE System SHALL compute the progress bar from the Board data already loaded for the page, without a separate request; Requirement 9 (Board Analytics) SHALL remain unchanged.
+6. WHERE a client viewport width is less than 1024 pixels, THE System SHALL show the progress bar without overlapping the Board title and without horizontal page scrolling, consistent with Requirement 14.4.

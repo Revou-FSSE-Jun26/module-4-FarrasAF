@@ -41,6 +41,8 @@ class ActivityEntry(BaseModel):
     # Deliberately not foreign keys: the targets may already be deleted.
     resource_id = db.Column(db.Uuid, nullable=False)
     secondary_resource_id = db.Column(db.Uuid, nullable=True)
+    # Snapshot of the names shown in the activity sentence; NULL for older entries.
+    details = db.Column(db.JSON, nullable=True)
 
     board = db.relationship("Board", back_populates="activity_entries", lazy="select")
     actor = db.relationship("User", lazy="select")

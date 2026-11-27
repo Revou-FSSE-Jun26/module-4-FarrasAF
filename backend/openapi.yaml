@@ -565,6 +565,64 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ---------------------------------------------------------------- To-do list
+  /api/cards/{cardId}/checklist-items:
+    post:
+      tags: [Cards]
+      summary: Add a to-do item to a Card (Member or Admin)
+      description: |
+        The item goes last and starts not done. A Card can have at most 50 items. The Card's `version` and
+        `updatedAt` do not change, and no Activity entry is recorded.
+      parameters:
+        - $ref: "#/components/parameters/CardId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateChecklistItemRequest" }
+      responses:
+        "201":
+          description: Created item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChecklistItem" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/checklist-items/{itemId}:
+    parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Cards]
+      summary: Edit the text and/or the done state of a to-do item (Member or Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateChecklistItemRequest" }
+      responses:
+        "200":
+          description: Updated item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChecklistItem" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Cards]
+      summary: Delete a to-do item (Member or Admin)
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ---------------------------------------------------------------- Comments
   /api/cards/{cardId}/comments:
     parameters:
@@ -844,8 +902,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [Members]
-      summary: Remove a member (Admin)
-      description: Rejected if it would leave the Board with no Admin.
+      summary: Remove a member whose role is Member (Admin)
+      description: Rejected with a validation error when the member's role is Admin, including the caller; change the role to Member first.
       responses:
         "204":
           description: Removed
@@ -1181,7 +1239,7 @@ components:
         dueDate: { type: string, format: date, nullable: true }
     Card:
       type: object
-      required: [id, columnId, boardId, title, description, assigneeId, dueDate, createdById, orderIndex, version, createdAt, updatedAt]
+      required: [id, columnId, boardId, title, description, assigneeId, dueDate, createdById, orderIndex, version, createdAt, updatedAt, checklistItems]
       properties:
         id: { type: string, format: uuid }
         columnId: { type: string, format: uuid }
@@ -1195,6 +1253,19 @@ components:
         version: { type: integer }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        checklistItems:
+          type: array
+          items: { $ref: "#/components/schemas/ChecklistItem" }
+    ChecklistItem:
+      type: object
+      required: [id, cardId, text, isDone, orderIndex, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        cardId: { type: string, format: uuid }
+        text: { type: string, minLength: 1, maxLength: 255 }
+        isDone: { type: boolean }
+        orderIndex: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
     SearchResult:
       type: object
       required: [id, title, description, assigneeId, dueDate, orderIndex, createdAt, updatedAt, board, column]
@@ -1219,6 +1290,18 @@ components:
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
+
+    CreateChecklistItemRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 255, description: Trimmed before the length check }
+    UpdateChecklistItemRequest:
+      type: object
+      description: At least one of `text` and `isDone` is required; omitted fields stay unchanged.
+      properties:
+        text: { type: string, minLength: 1, maxLength: 255 }
+        isDone: { type: boolean }
 
     CreateCommentRequest:
       type: object
@@ -1258,11 +1341,15 @@ components:
 
     ActivityEntry:
       type: object
-      required: [id, boardId, actorId, eventType, resourceId, secondaryResourceId, createdAt]
+      required: [id, eventType, actor, resourceId, secondaryResourceId, details, createdAt]
       properties:
         id: { type: string, format: uuid }
-        boardId: { type: string, format: uuid }
-        actorId: { type: string, format: uuid }
+        actor:
+          type: object
+          required: [id, displayName]
+          properties:
+            id: { type: string, format: uuid }
+            displayName: { type: string }
         eventType:
           type: string
           enum:
@@ -1279,6 +1366,16 @@ components:
             - member_removed
         resourceId: { type: string, format: uuid }
         secondaryResourceId: { type: string, format: uuid, nullable: true }
+        details:
+          type: object
+          nullable: true
+          description: Names saved when the event happened; null for entries recorded before details existed.
+          properties:
+            cardTitle: { type: string }
+            columnName: { type: string }
+            fromColumnName: { type: string }
+            toColumnName: { type: string }
+            memberName: { type: string }
         createdAt: { type: string, format: date-time }
 
     Analytics:
@@ -1341,7 +1438,7 @@ components:
                 type: array
                 items:
                   type: object
-                  required: [id, title, description, orderIndex, dueDate, assignee]
+                  required: [id, title, description, orderIndex, dueDate, assignee, checklistItems]
                   properties:
                     id: { type: string, format: uuid }
                     title: { type: string }
@@ -1352,6 +1449,15 @@ components:
                       nullable: true
                       allOf:
                         - $ref: "#/components/schemas/GuestUser"
+                    checklistItems:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, text, isDone]
+                        properties:
+                          id: { type: string, format: uuid }
+                          text: { type: string }
+                          isDone: { type: boolean }
     GuestComment:
       type: object
       required: [id, parentCommentId, body, author, createdAt, editedAt]

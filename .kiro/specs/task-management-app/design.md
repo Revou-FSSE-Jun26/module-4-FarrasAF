@@ -119,6 +119,7 @@ Role resolution reads the stored `BoardMembership` (and, for Team-scoped endpoin
 | Board_Service | Board create/update/archive/restore/permanent-delete, default columns, settings | R1 |
 | Column_Service | Column create/edit/reorder/delete with contiguous reindexing, empty-before-delete rule | R2 |
 | Card_Service | Card CRUD, assignment, move/reorder with reindexing, position persistence, optimistic concurrency | R3, R4, R13 |
+| Card_Service, to-do part (backend module `checklist/`) | To-do items of a Card: add, edit text, tick/untick, delete; at most 50 per Card; no Activity entries, no Card `version` | R20 |
 | Comment_Service | Top-level comments, threaded replies, edit/delete with cascade, optimistic concurrency | R5, R13 |
 | Notification_Service | Create mention notifications, cursor-paginated retrieval, unread filter, mark-as-read | R6 |
 | Search_Service | Case-insensitive title substring search across accessible boards, capped+ordered results | R7 |
@@ -193,6 +194,9 @@ All application code lives under `frontend/src/` (`app/` for App Router pages, `
 - **Mentions:** The mention picker inserts the token `@[<userId>]` into the Comment body when the user picks a Board member from `GET /api/boards/{boardId}/members`, and renders each token as `@displayName` (as plain text) by looking the id up in that members list, or as `@unknown` when the id is not found.
 - **Token pages:** `/invite/[token]` and `/join/[token]` send `Referrer-Policy: no-referrer` (configured in `next.config.ts`) and never leak the token into links, analytics, or storage.
 - **Error handling and toasts (R14.6 to R14.9):** One pure helper, `src/lib/errorHandler.ts`, turns any thrown value into UI text: `getErrorMessage(err, fallback)` returns the backend `error.message` only for an `ApiError` with a 4xx status (R14.7); a 5xx status, a network failure, or any other exception returns the caller's fixed `fallback`, or the generic "Something went wrong. Please try again.", and never the underlying text. `logError(err, context)` writes to `console.error` only when `NODE_ENV !== "production"`, so production builds log nothing (R14.9). `BaseToastProvider` (mounted in the root layout) exposes `useToast()` with `showToast(message, variant)` and `showError(err, fallback)`; it shows at most 3 toasts, ignores a message already on screen, and registers `window` `unhandledrejection` and `error` listeners as a safety net for errors no `catch` handles. Failed actions and background failures (move, save, delete, create, comment, mark-read, copy link, polling) show a toast through hooks and forms (R14.6). Page-load failures keep the `BaseErrorState` view with a retry button and also show a toast. Field validation stays inline next to the field. Login keeps its single generic inline message for 4xx responses (R15.3) and shows a toast for 5xx and network failures. Polling shows one toast per outage, not one per retry. The `/invite/[token]` 403 keeps its plain "link not available" message without a toast. Error boundaries: `app/error.tsx` and `app/(app)/error.tsx` (the second keeps the navigation bar visible), `app/global-error.tsx` (replaces the root layout, inline styles only), and `app/not-found.tsx` render `BaseErrorFallback` with a generic message, a retry action (where applicable), and a link home. The caught error is logged in development only and is never rendered (R14.8, R14.9).
+- **Board sidebar and in-Board search (R19):** `src/app/(app)/boards/[boardId]/layout.tsx` wraps the four Board pages (`/boards/[boardId]`, `activity`, `analytics`, `settings`) in `BoardProvider` and `BoardShell`. `BoardProvider` calls `useBoard(boardId)` once and shares the result (Board, loading and error state, `refreshBoard`, mutations) through React context (`useBoardContext`); `BoardView` reads the Board from that context instead of calling `useBoard` itself, and the context also holds the id of the open Card. `BoardShell` renders `BoardSidebar` next to the page content and the single `CardDetailModal` (so a Card can be opened from any Board page). `BoardSidebar` shows the Board name, links to Board, Activity, Analytics, and Board settings (the page header links of `BoardView` are removed; the current page uses `aria-current="page"`), and a search field. The search is a pure function in `src/lib/boardSearch.ts` (`filterCardsByTitle(columns, query)`: trims the query, returns no results for an empty query, otherwise every Card whose Title contains the query as a case-insensitive substring, each with its Column name, in Column order then Card order). It runs on the already loaded Board data on every keystroke, so no new endpoint, no debounce, and no request is made; Requirement 7 (`GET /api/search`, used by `/search`) is unchanged. Selecting a result opens the Card detail. Below 1024px the sidebar stacks above the content (`flex-col lg:flex-row`), at 1024px and above it is a fixed-width column on the left (R14.3, R14.4).
+- **Card to-do list and progress (R20):** The Card detail modal shows a to-do section (`ChecklistSection`, `ChecklistItemRow`; logic in `useChecklist`) and, only when the Card has at least one item, a progress bar (`ChecklistProgress`) at the top right of the modal, in the same row as the Title field. The percentage comes from the pure `checklistProgress` helper in `src/lib/checklist.ts`: done items divided by all items, rounded to a whole number (3 of 5 is 60%, 1 of 3 is 33%). Items come from `card.checklistItems` in the Board response; each change calls the item endpoint and then refetches the Board, so the server state is shown. Enter inside the section adds or saves the item and does not submit the Card form. Guests see the same list and bar read-only in the `/invite/[token]` Card view.
+- **Board progress bar (R21):** `BoardView` shows `BoardProgress` at the right end of the Board title row (the row below the "Back to Boards" link; it wraps under the title below 1024px). The numbers come from the pure `boardProgress(columns)` helper in `src/lib/boardProgress.ts`: Cards in Columns whose name is exactly "Done" (the same rule as Analytics, R9.3) divided by all Cards, rounded to a whole percent, and 0% when the Board has no Cards. It reads the Board already loaded by `BoardProvider`, so it follows drag-and-drop moves, Card changes, and Column changes immediately, and it makes no request and adds no endpoint. The bar itself is the shared `BaseProgressBar`, which the Card to-do progress (R20) now also uses.
 - **Responsive layout:** Tailwind breakpoints (`lg:` = 1024px) render a horizontally laid out board at >= 1024px and a stacked/scrollable-per-column layout below it, avoiding horizontal page scroll and overlap (R14.3, R14.4).
 
 ## Data Models
@@ -264,6 +268,9 @@ erDiagram
 - `column_id` (FK), `board_id` (FK, denormalized for search/analytics/scope checks), `title` (1–255 trimmed), `description` (0–5000, default ""), `assignee_id` (FK User, nullable), `due_date` (nullable), `created_by_id` (FK User), `order_index` (int, >= 0), `version` (int, default 1). Card is the `BaseModel` exception noted above: it redefines `updated_at` with `default=utc_now` and no `onupdate`, set explicitly by `Card_Service`, and `updatedAt` is the one base field exposed in a response schema (R3.1, R3.3, R4.7).
 - Index on `(column_id, order_index)` with unique `(column_id, order_index)`. Index on `(board_id, lower(title))` and `(board_id, updated_at desc, id desc)` to support search ordering (R7.6). `version` supports R13.
 
+**ChecklistItem** — one to-do item of a Card's single to-do list (R20).
+- `card_id` (FK Card, `ON DELETE CASCADE`, indexed), `text` (1–255 trimmed), `is_done` (boolean, default false), `order_index` (int; a new item gets the highest existing value plus one, so it goes last; items are never reordered, so a delete leaves a harmless gap). A Card has at most 50 items. `Card.checklist_items` is loaded with `selectin` so Board and Card responses embed the items without extra queries per Card.
+
 **Comment** — message on a Card, optionally threaded.
 - `card_id` (FK), `author_id` (FK User), `parent_comment_id` (FK Comment, nullable), `body` (1–5000 non-whitespace), `edited_at` (nullable), `version` (int, default 1). `edited_at` is the user-facing edit timestamp, distinct from the inherited `updated_at`: it is null until the first edit and is set explicitly by `Comment_Service` on each edit, and it is the edit timestamp exposed in the Comment response schema.
 - Self-referential `parent_comment_id` models threaded replies; replies must share the same `card_id` as the parent (R5.2, R5.8). Deleting a comment cascades to all descendant replies (R5.4).
@@ -277,7 +284,7 @@ erDiagram
 - Revocation flips `status` to `inactive` without touching other links (R11.2). Lookup by `token` validates Guest access and grants read-only access iff the link exists and is `active` (R11.3, R11.5, R11.6). A token bound to an archived Board is rejected with `AuthorizationError` until the Board is restored (R11.8).
 
 **ActivityEntry** — logged Board event.
-- `board_id` (FK), `actor_id` (FK User), `event_type` (enum: `card_created`, `card_updated`, `card_moved`, `card_deleted`, `comment_created`, `comment_edited`, `comment_deleted`, `column_created`, `column_deleted`, `member_joined`, `member_removed`), `resource_id` (affected primary resource identifier), `secondary_resource_id` (nullable; e.g., Card id for comment events R8.6/R8.7, or target User id for member events R8.10/R8.11).
+- `board_id` (FK), `actor_id` (FK User), `event_type` (enum: `card_created`, `card_updated`, `card_moved`, `card_deleted`, `comment_created`, `comment_edited`, `comment_deleted`, `column_created`, `column_deleted`, `member_joined`, `member_removed`), `resource_id` (affected primary resource identifier), `secondary_resource_id` (nullable; e.g., Card id for comment events R8.6/R8.7, or target User id for member events R8.10/R8.11), `details` (nullable JSON snapshot of the names shown in the Activity sentence, saved in the same transaction as the event because the targets may be deleted later; see API Response Schemas, R8.16, R8.17).
 - Index on `(board_id, created_at desc, id desc)` for paged retrieval ordering (R8.12). `created_at` (UTC) also drives analytics activity-by-day grouping (R9.5).
 
 ### Version Identifiers and Optimistic Concurrency (R13)
@@ -355,6 +362,9 @@ Reorder body: `{ "targetIndex": int }`; out-of-range index rejected (R2.7). Dele
 | PATCH | `/api/cards/{cardId}` | Member/Admin | Atomic multi-field edit; requires `version` | R3.3, R3.4, R3.6, R3.7, R3.8, R3.9, R3.10, R13 |
 | POST | `/api/cards/{cardId}/move` | Member/Admin | Move to target column + index, reindex (no `version`) | R4.1, R4.2, R4.3, R4.4, R4.5, R4.6, R4.7, R13.6 |
 | DELETE | `/api/cards/{cardId}` | Member/Admin | Delete + reindex column (`204`) | R3.5, R3.6, R3.9, R13.6 |
+| POST | `/api/cards/{cardId}/checklist-items` | Member/Admin | Append a to-do item (`text`, trimmed 1-255; at most 50 per Card); starts not done; returns `ChecklistItem` (`201`); no `version`, does not change the Card's `version` or `updatedAt` | R20.1, R20.3, R20.5, R20.8, R20.9 |
+| PATCH | `/api/checklist-items/{itemId}` | Member/Admin | Change `text` and/or `isDone` (at least one required; omitted fields unchanged); no `version` | R20.2, R20.4, R20.5, R20.8, R20.9 |
+| DELETE | `/api/checklist-items/{itemId}` | Member/Admin | Delete a to-do item (`204`) | R20.6, R20.8, R20.9 |
 
 Move body: `{ "targetColumnId": id, "targetIndex": int }`. Validations: target column must be in the same board (R4.4); target index is an integer in `[0, count-in-target-after-removal]` (R4.5); Guests rejected (R4.6, R3.6). A move needs no `version` and never changes `version` (R13.6); it sets `updated_at` only on the moved Card, leaving reindex-shifted Cards' `updated_at` unchanged (R4.7). PATCH requires `version`, sets `updated_at`, and bumps `version` (R3.3, R13.3). Anonymous Guest card reads go through `/api/guest/<token>/board` (cards nested), not these authenticated routes.
 
@@ -409,7 +419,7 @@ Response: `{ totalCards, perColumn: [{columnId, count}], completionRate, activit
 | GET | `/api/boards/{boardId}/members` | Member/Admin | List members `{ items: [{ userId, displayName, role }] }` | R10.9, R12.3 |
 | POST | `/api/boards/{boardId}/members` | Admin | Add member `{ userId, role }` (must be a Team_Member of the Board's Team) | R10.1, R10.4, R10.5, R10.7, R10.8 |
 | PATCH | `/api/boards/{boardId}/members/{userId}` | Admin | Change role (effective on the member's next request) | R10.3, R10.6, R10.7 |
-| DELETE | `/api/boards/{boardId}/members/{userId}` | Admin | Remove member (`204`) | R10.2, R10.6, R10.7 |
+| DELETE | `/api/boards/{boardId}/members/{userId}` | Admin | Remove a member whose role is Member (`204`); a member whose role is Admin is rejected with a validation error (change the role to Member first) | R10.2, R10.7, R10.10 |
 | GET | `/api/boards/{boardId}/invitations` | Admin | List Invitation_Links (InvitationLink schema) | R11.9, R11.7 |
 | POST | `/api/boards/{boardId}/invitations` | Admin | Generate invitation link (InvitationLink schema) | R11.1, R11.7 |
 | POST | `/api/invitations/{token}/revoke` | Admin | Revoke link (set inactive; InvitationLink schema) | R11.2, R11.7 |
@@ -548,7 +558,20 @@ These are the camelCase JSON shapes returned by the endpoints above. Field names
   orderIndex: number,
   version: number,
   createdAt: string,
-  updatedAt: string
+  updatedAt: string,
+  checklistItems: ChecklistItem[]   // ordered; empty when the Card has no to-do list
+}
+```
+
+**ChecklistItem** (item of `Card.checklistItems`, result of the to-do endpoints):
+```
+{
+  id: string,
+  cardId: string,
+  text: string,
+  isDone: boolean,
+  orderIndex: number,
+  createdAt: string
 }
 ```
 
@@ -582,16 +605,20 @@ These are the camelCase JSON shapes returned by the endpoints above. Field names
 ```
 {
   id: string,
-  boardId: string,
-  actorId: string,
+  actor: { id: string, displayName: string },
   eventType: "card_created" | "card_updated" | "card_moved" | "card_deleted"
     | "comment_created" | "comment_edited" | "comment_deleted"
     | "column_created" | "column_deleted" | "member_joined" | "member_removed",
   resourceId: string,
   secondaryResourceId: string | null,
+  details: {
+    cardTitle?: string, columnName?: string,
+    fromColumnName?: string, toColumnName?: string, memberName?: string
+  } | null,
   createdAt: string
 }
 ```
+`details` is a snapshot of the names the Activity sentence shows, saved when the event happens: `card_created` (`cardTitle`, `columnName`), `card_updated` and `card_deleted` (`cardTitle`), `card_moved` (`cardTitle`, `fromColumnName`, `toColumnName`), the three comment events (`cardTitle`), `column_created` and `column_deleted` (`columnName`), `member_joined` and `member_removed` (`memberName`). It is `null` for entries recorded before the field existed. The frontend builds the sentence (for example `Ada moved the card "Fix login" from "To Do" to "Doing"`) from `actor.displayName` and `details`.
 
 **InvitationLink** (result of `POST /api/boards/{boardId}/invitations`, item of `GET /api/boards/{boardId}/invitations`) — returns `token` because the endpoint issues the link:
 ```
@@ -634,7 +661,8 @@ These are the camelCase JSON shapes returned by the endpoints above. Field names
           description: string,
           orderIndex: number,
           dueDate: string | null,
-          assignee: { id: string, displayName: string } | null
+          assignee: { id: string, displayName: string } | null,
+          checklistItems: { id: string, text: string, isDone: boolean }[]
         }
       ]
     }
@@ -901,9 +929,9 @@ These properties are derived from the acceptance-criteria prework. Redundant cri
 
 ### Property 23: Board retains at least one Admin
 
-*For any* Board and *any* member removal or role-change request, the request is rejected and membership is unchanged if it would reduce the number of Admins to zero; consequently the Admin count is always at least one.
+*For any* Board, a role-change request is rejected and membership is unchanged if it would reduce the number of Admins to zero, and *any* removal request for a member whose role is Admin is rejected and leaves membership unchanged; consequently the Admin count is always at least one.
 
-**Validates: Requirements 10.6**
+**Validates: Requirements 10.6, 10.10**
 
 ### Property 24: Role changes apply on the next request from stored membership
 

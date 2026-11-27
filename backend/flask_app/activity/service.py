@@ -19,8 +19,13 @@ def record_activity(
     event_type: str,
     resource_id: UUID,
     secondary_resource_id: UUID | None = None,
+    details: dict[str, str] | None = None,
 ) -> ActivityEntry:
-    """Add an Activity_Entry to the session. Never commits; the caller owns the transaction."""
+    """Add an Activity_Entry to the session. Never commits; the caller owns the transaction.
+
+    `details` is a snapshot of the names shown in the activity sentence (Card title,
+    Column names, member name), taken now because the targets may be deleted later.
+    """
     if event_type not in EVENT_TYPES:
         raise ValueError(f"Unknown activity event type: {event_type}")
     entry = ActivityEntry(
@@ -29,6 +34,7 @@ def record_activity(
         event_type=event_type,
         resource_id=resource_id,
         secondary_resource_id=secondary_resource_id,
+        details=details,
     )
     db.session.add(entry)
     return entry
@@ -42,6 +48,7 @@ def _entry_to_dict(entry: ActivityEntry) -> dict[str, Any]:
         "actor": {"id": entry.actor.id, "display_name": entry.actor.display_name},
         "resource_id": entry.resource_id,
         "secondary_resource_id": entry.secondary_resource_id,
+        "details": entry.details,
     }
 
 

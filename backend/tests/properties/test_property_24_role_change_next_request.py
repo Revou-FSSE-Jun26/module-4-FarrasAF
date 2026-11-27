@@ -65,5 +65,9 @@ def test_role_change_or_removal_applies_on_next_decision(
         _assert_decisions(board, target, new_role)
 
     if remove_at_end:
+        # An Admin cannot be removed (R10.10), so demote first, as the UI requires.
+        if (changes[-1] if changes else initial) == "admin":
+            change_member_role_service(board.id, target.id, {"role": "member"})
+            _assert_decisions(board, target, "member")
         remove_member_service(board.id, target.id, creator)
         _assert_decisions(board, target, None)

@@ -54,13 +54,25 @@ export default function AppShell({ children }: AppShellProps) {
             href="/boards"
             className="flex items-center gap-2 rounded-lg pr-1 text-sm font-semibold tracking-tight text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
-            <span
+            <svg
               aria-hidden="true"
-              className="flex size-7 items-center justify-center rounded-lg bg-indigo-600 text-xs font-bold text-white shadow-2xs"
+              viewBox="0 0 28 28"
+              className="size-7 shrink-0 rounded-lg shadow-2xs"
             >
-              K
-            </span>
-            <span className="hidden sm:inline">Kanban</span>
+              <defs>
+                <linearGradient id="revotask-logo" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stopColor="#6366f1" />
+                  <stop offset="1" stopColor="#4338ca" />
+                </linearGradient>
+              </defs>
+              <rect width="28" height="28" rx="8" fill="url(#revotask-logo)" />
+              <path
+                d="M9.5 21V7h5.2a4.2 4.2 0 0 1 .9 8.3L19 21h-3.2l-3-5.4H12.5V21H9.5Zm3-8h2.1a1.6 1.6 0 0 0 0-3.2H12.5V13Z"
+                fill="#ffffff"
+                fillRule="evenodd"
+              />
+            </svg>
+            <span className="hidden sm:inline">RevoTask</span>
           </Link>
           <span
             aria-hidden="true"

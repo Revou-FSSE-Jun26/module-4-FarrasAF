@@ -8,7 +8,7 @@ from typing import Literal
 from flask_app.auth.decorators import current_user, token_required
 from flask_app.common.exceptions import AuthorizationError, NotFoundError
 from flask_app.extensions import db
-from flask_app.models import BoardMembership, Card, Column, Comment
+from flask_app.models import BoardMembership, Card, ChecklistItem, Column, Comment
 
 # Operation groups from the capability matrix in design.md.
 READ_BOARD_CONTENT = "read_board_content"
@@ -57,10 +57,13 @@ def _resolve_board_id(route_params: dict[str, object]) -> uuid.UUID:
     if isinstance(board_id, uuid.UUID):
         return board_id
 
-    resolvers: tuple[tuple[str, type[Column] | type[Card] | type[Comment]], ...] = (
+    resolvers: tuple[
+        tuple[str, type[Column] | type[Card] | type[Comment] | type[ChecklistItem]], ...
+    ] = (
         ("column_id", Column),
         ("card_id", Card),
         ("comment_id", Comment),
+        ("item_id", ChecklistItem),
     )
     for param, model in resolvers:
         value = route_params.get(param)
@@ -71,6 +74,13 @@ def _resolve_board_id(route_params: dict[str, object]) -> uuid.UUID:
                 db.session.query(Card.board_id)
                 .join(Comment, Comment.card_id == Card.id)
                 .filter(Comment.id == value)
+                .scalar()
+            )
+        elif model is ChecklistItem:
+            resolved = (
+                db.session.query(Card.board_id)
+                .join(ChecklistItem, ChecklistItem.card_id == Card.id)
+                .filter(ChecklistItem.id == value)
                 .scalar()
             )
         else:

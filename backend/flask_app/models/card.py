@@ -49,3 +49,11 @@ class Card(BaseModel):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    checklist_items = db.relationship(
+        "ChecklistItem",
+        back_populates="card",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="(ChecklistItem.order_index, ChecklistItem.id)",
+    )

@@ -67,7 +67,9 @@ def create_column_service(board_id: UUID, payload: dict[str, Any], user: User) -
     column = Column(board_id=board_id, name=payload["name"], order_index=len(columns))
     db.session.add(column)
     db.session.flush()
-    record_activity(board_id, user.id, "column_created", column.id)
+    record_activity(
+        board_id, user.id, "column_created", column.id, details={"column_name": column.name}
+    )
     db.session.commit()
     return _column_dict(column)
 
@@ -95,6 +97,7 @@ def reorder_column_service(column_id: UUID, payload: dict[str, Any]) -> dict[str
 def delete_column_service(column_id: UUID, user: User) -> None:
     column = _get_column(column_id)
     board_id = column.board_id
+    column_name = column.name
     columns = _lock_board_columns(board_id)
     card_count = db.session.scalar(
         select(func.count()).select_from(Card).where(Card.column_id == column_id)
@@ -104,5 +107,7 @@ def delete_column_service(column_id: UUID, user: User) -> None:
     columns.remove(column)
     db.session.delete(column)
     reindex(columns)
-    record_activity(board_id, user.id, "column_deleted", column_id)
+    record_activity(
+        board_id, user.id, "column_deleted", column_id, details={"column_name": column_name}
+    )
     db.session.commit()

@@ -6,7 +6,7 @@ import { apiClient } from "@/lib/apiClient";
 import { getErrorMessage } from "@/lib/errorHandler";
 import type { BoardDetail } from "@/types/api";
 
-interface UseBoardResult {
+export interface UseBoardResult {
   board: BoardDetail | null;
   isLoading: boolean;
   error: string | null;

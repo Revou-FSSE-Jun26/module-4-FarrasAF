@@ -148,6 +148,13 @@ def test_role_change_applies_on_the_next_request(
         member_client.post(f"/api/boards/{board.id}/columns", json={"name": "C"}).status_code == 201
     )
 
+    # An Admin cannot be removed (R10.10): the request fails and access stays.
+    assert admin_client.delete(f"/api/boards/{board.id}/members/{member.id}").status_code == 400
+    assert member_client.get(f"/api/boards/{board.id}/members").status_code == 200
+    demote_again = admin_client.patch(
+        f"/api/boards/{board.id}/members/{member.id}", json={"role": "member"}
+    )
+    assert demote_again.status_code == 200
     remove = admin_client.delete(f"/api/boards/{board.id}/members/{member.id}")
     assert remove.status_code == 204
     assert member_client.get(f"/api/boards/{board.id}/members").status_code == 403
@@ -254,3 +261,52 @@ def test_successful_login_resets_failure_count(app: Flask, db_session: Any) -> N
         assert _login(client, email, "wrong-password-1").status_code == 401
     # Two failures after a reset: still not locked.
     assert _login(client, email).status_code == 200
+
+
+def test_checklist_items_are_member_writable_guest_readable_and_in_card_payloads(
+    db_session: Any,
+    client: FlaskClient,
+    make_session: Callable[[], tuple[FlaskClient, User]],
+    make_board: MakeBoard,
+    make_column: MakeColumn,
+    make_card: MakeCard,
+) -> None:
+    """R20: members edit the to-do list, outsiders cannot, Guests see it read-only."""
+    admin_client, admin = make_session()
+    outsider, _ = make_session()
+    board = make_board(admin=admin)
+    card = make_card(column=make_column(board=board), title="Task", created_by=admin)
+
+    created = admin_client.post(f"/api/cards/{card.id}/checklist-items", json={"text": " Write "})
+    assert created.status_code == 201, created.get_json()
+    item = created.get_json()
+    assert (item["text"], item["isDone"], item["cardId"]) == ("Write", False, str(card.id))
+
+    assert (
+        outsider.post(f"/api/cards/{card.id}/checklist-items", json={"text": "x"}).status_code
+        == 403
+    )
+    assert (
+        outsider.patch(f"/api/checklist-items/{item['id']}", json={"isDone": True}).status_code
+        == 403
+    )
+    assert outsider.delete(f"/api/checklist-items/{item['id']}").status_code == 403
+
+    ticked = admin_client.patch(f"/api/checklist-items/{item['id']}", json={"isDone": True})
+    assert ticked.status_code == 200 and ticked.get_json()["isDone"] is True
+    assert admin_client.patch(f"/api/checklist-items/{item['id']}", json={}).status_code == 400
+
+    # The Card payloads (Card and Board responses) carry the items.
+    assert admin_client.get(f"/api/cards/{card.id}").get_json()["checklistItems"][0]["isDone"]
+    columns = admin_client.get(f"/api/boards/{board.id}").get_json()["columns"]
+    assert columns[0]["cards"][0]["checklistItems"][0]["text"] == "Write"
+
+    token = admin_client.post(f"/api/boards/{board.id}/invitations").get_json()["token"]
+    guest_card = client.get(f"/api/guest/{token}/board").get_json()["columns"][0]["cards"][0]
+    assert guest_card["checklistItems"] == [{"id": item["id"], "text": "Write", "isDone": True}]
+    assert (
+        client.post(f"/api/cards/{card.id}/checklist-items", json={"text": "x"}).status_code == 401
+    )
+
+    assert admin_client.delete(f"/api/checklist-items/{item['id']}").status_code == 204
+    assert admin_client.get(f"/api/cards/{card.id}").get_json()["checklistItems"] == []

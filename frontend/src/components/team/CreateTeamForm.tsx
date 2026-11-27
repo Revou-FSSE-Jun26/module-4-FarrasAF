@@ -39,7 +39,7 @@ export default function CreateTeamForm({ onTeamCreate }: CreateTeamFormProps) {
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="flex flex-col gap-2 lg:flex-row lg:items-center"
+      className="flex flex-col gap-2 lg:flex-row lg:items-start"
     >
       <BaseInput
         label="Team name"
@@ -50,7 +50,7 @@ export default function CreateTeamForm({ onTeamCreate }: CreateTeamFormProps) {
       <BaseButton
         type="submit"
         isLoading={isSubmitting}
-        className="h-10 shrink-0 whitespace-nowrap"
+        className="h-10 shrink-0 whitespace-nowrap lg:mt-[26px]"
       >
         Create Team
       </BaseButton>

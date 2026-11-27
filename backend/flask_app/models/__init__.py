@@ -3,6 +3,7 @@ from flask_app.models.base import BaseModel
 from flask_app.models.board import Board
 from flask_app.models.board_membership import BoardMembership
 from flask_app.models.card import Card
+from flask_app.models.checklist_item import ChecklistItem
 from flask_app.models.column import Column
 from flask_app.models.comment import Comment
 from flask_app.models.invitation_link import InvitationLink
@@ -19,6 +20,7 @@ __all__ = [
     "Board",
     "BoardMembership",
     "Card",
+    "ChecklistItem",
     "Column",
     "Comment",
     "InvitationLink",

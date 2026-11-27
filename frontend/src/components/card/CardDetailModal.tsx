@@ -3,6 +3,8 @@
 import type { FormEvent } from "react";
 import BaseButton from "@/components/shared/BaseButton";
 import BaseInput from "@/components/shared/BaseInput";
+import ChecklistProgress from "@/components/card/ChecklistProgress";
+import ChecklistSection from "@/components/card/ChecklistSection";
 import CommentSection from "@/components/comment/CommentSection";
 import BaseModal from "@/components/shared/BaseModal";
 import useCardDetail from "@/hooks/useCardDetail";
@@ -43,13 +45,20 @@ export default function CardDetailModal({
           </p>
         ) : null}
 
-        <BaseInput
-          label="Title"
-          value={detail.title}
-          error={detail.titleError}
-          maxLength={255}
-          onChange={(e) => detail.setTitle(e.target.value)}
-        />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <BaseInput
+            label="Title"
+            value={detail.title}
+            error={detail.titleError}
+            maxLength={255}
+            onChange={(e) => detail.setTitle(e.target.value)}
+          />
+          {card.checklistItems.length > 0 ? (
+            <div className="w-full sm:w-52 sm:shrink-0">
+              <ChecklistProgress items={card.checklistItems} />
+            </div>
+          ) : null}
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <label
@@ -102,6 +111,12 @@ export default function CardDetailModal({
           type="date"
           value={detail.dueDate}
           onChange={(e) => detail.setDueDate(e.target.value)}
+        />
+
+        <ChecklistSection
+          cardId={card.id}
+          items={card.checklistItems}
+          onChecklistChange={onCardChange}
         />
 
         {detail.isConfirmingDelete ? (

@@ -1,5 +1,6 @@
 "use client";
 
+import ChecklistProgress from "@/components/card/ChecklistProgress";
 import BaseEmptyState from "@/components/shared/BaseEmptyState";
 import BaseErrorState from "@/components/shared/BaseErrorState";
 import BaseLoadingState from "@/components/shared/BaseLoadingState";
@@ -95,7 +96,9 @@ function GuestBoardColumns({
                     <span className="block text-[13.5px] leading-snug font-medium break-words">
                       {card.title}
                     </span>
-                    {card.dueDate || card.description.trim() || card.assignee ? (
+                    {card.dueDate ||
+                    card.description.trim() ||
+                    card.assignee ? (
                       <span className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                         {card.dueDate ? (
                           <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600 tabular-nums">
@@ -186,6 +189,36 @@ export default function GuestBoardView({ token }: GuestBoardViewProps) {
               Assignee: {card.assignee ? card.assignee.displayName : "None"}
               {card.dueDate ? ` · Due ${card.dueDate}` : ""}
             </p>
+            {card.checklistItems.length > 0 ? (
+              <section aria-label="To-do list" className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold text-gray-900">
+                  To-do list
+                </h3>
+                <ChecklistProgress items={card.checklistItems} />
+                <ul className="flex flex-col gap-1.5">
+                  {card.checklistItems.map((item) => (
+                    <li key={item.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={item.isDone}
+                        disabled
+                        aria-label={item.text}
+                        className="size-4 shrink-0 accent-indigo-600"
+                      />
+                      <span
+                        className={`text-sm break-words ${
+                          item.isDone
+                            ? "text-slate-400 line-through"
+                            : "text-slate-900"
+                        }`}
+                      >
+                        {item.text}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
             <h3 className="text-sm font-semibold text-gray-900">Comments</h3>
             {isCommentsLoading ? (
               <BaseLoadingState label="Loading comments..." />

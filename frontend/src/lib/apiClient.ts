@@ -10,10 +10,12 @@ import type {
   Card,
   ChangeBoardMemberRoleRequest,
   ChangePasswordRequest,
+  ChecklistItem,
   Column,
   Comment,
   CreateBoardRequest,
   CreateCardRequest,
+  CreateChecklistItemRequest,
   CreateColumnRequest,
   CreateCommentRequest,
   CreateTeamRequest,
@@ -37,6 +39,7 @@ import type {
   TeamMember,
   UpdateBoardRequest,
   UpdateCardRequest,
+  UpdateChecklistItemRequest,
   UpdateCommentRequest,
   UpdateProfileRequest,
   User,
@@ -270,6 +273,20 @@ export const apiClient = {
     ),
   createComment: (cardId: string, body: CreateCommentRequest) =>
     request<Comment>("POST", `/api/cards/${enc(cardId)}/comments`, body),
+  createChecklistItem: (cardId: string, body: CreateChecklistItemRequest) =>
+    request<ChecklistItem>(
+      "POST",
+      `/api/cards/${enc(cardId)}/checklist-items`,
+      body,
+    ),
+  updateChecklistItem: (itemId: string, body: UpdateChecklistItemRequest) =>
+    request<ChecklistItem>(
+      "PATCH",
+      `/api/checklist-items/${enc(itemId)}`,
+      body,
+    ),
+  deleteChecklistItem: (itemId: string) =>
+    request<void>("DELETE", `/api/checklist-items/${enc(itemId)}`),
   updateComment: (commentId: string, body: UpdateCommentRequest) =>
     request<Comment>("PATCH", `/api/comments/${enc(commentId)}`, body),
   deleteComment: (commentId: string) =>
