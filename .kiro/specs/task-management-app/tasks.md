@@ -232,6 +232,17 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Tests: `tests/unit/test_attachments.py` with `common/storage.py` replaced by a fake, and an API flow in `tests/integration/test_api_flows.py` (outsider and Guest rejected, non-uploader Member rejected, Admin can delete, type, size, and count limits, no attachments in the Guest payload)
     - _Requirements: 22.1, 22.2, 22.3, 22.4, 22.5, 22.6, 22.7, 22.8, 22.9, 22.10, 22.11, 22.12, 22.13, 22.14, 22.15, 22.17, 8.18, 8.19_
 
+  - [x] 6.7 Implement Card assignment Notifications (backend)
+    - `Notification` model: new `type` (`comment_mention` | `card_assigned`, check constraint), nullable `comment_id`, new nullable `card_id` (FK `cards`, `ON DELETE CASCADE`, indexed), `Card.notifications` back-reference, and a check constraint tying each type to its required column; one new migration (hand-reviewed; existing rows get `comment_mention`; the unique `(recipient_id, comment_id)` stays); `design.md` Data Models
+    - `notifications/service.py`: pure `should_notify_assignment(previous_assignee_id, new_assignee_id, actor_id)`, add-only `create_assignment_notification()`, list query eager-loads Card and Board, response gains `type`, `cardId`, `cardTitle`, `boardName`
+    - `cards/service.py`: `create_card_service` and `update_card_service` call the helper before the single commit; `openapi.yaml` Notification schema updated
+    - Tests: `tests/unit/test_notifications.py` (decision function, create on assign, none for self-assign, removal, unchanged assignee, other field edit, move, rejected edit or version conflict, Card delete removes it, list shape), existing Notification tests updated for the new fields
+    - _Requirements: 6.11, 6.12, 6.13, 6.14, 6.15, 6.17_
+
+  - [x] 6.8 Include the Card Title in mention Notifications (backend)
+    - `notifications/service.py`: for `comment_mention`, `cardTitle` comes from the Comment's Card; the list query also eager-loads `Notification.comment` and its Card; no schema or migration change
+    - _Requirements: 6.18_
+
   - [x] 6.2 Write property test for Activity pagination
     - File: `tests/properties/test_property_18_activity_pagination.py`
     - **Property 18: Activity pagination visits each entry exactly once in order**
@@ -542,6 +553,14 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Upload controls only for Members and Admins and hidden at 5 Attachments; Delete only for the uploader or an Admin; loading, empty, and error states; no section on the Guest page
     - _Requirements: 22.6, 22.7, 22.11, 22.16, 8.18, 8.19_
 
+  - [x] 15.13 Show Card assignment Notifications in the bell
+    - `src/types/api.ts`: `Notification` gains `type`, `cardId`, `cardTitle`, `boardName`, and a nullable `commentId`; `NotificationItem` renders by `type` and links both types to the Board
+    - _Requirements: 6.15, 6.16_
+
+  - [x] 15.14 Show the Card Title in mention Notifications
+    - `NotificationItem` renders `You were mentioned in a comment on the card "<cardTitle>"`; `e2e/comments.spec.ts` assertion updated
+    - _Requirements: 6.19_
+
 - [x] 16. Teams UI
   - [x] 16.1 Implement Teams pages and join flow
     - `useTeams` hook, `/teams` (list and create), `/teams/[teamId]` (members; join-link create, list, revoke shown only when `currentUserTeamRole` is `team_admin`), `/join/[token]` (preview the Team name, call accept only after confirmation, one generic invalid-link message, login redirect and return)
@@ -735,6 +754,15 @@ Sub-task numbers that implement or test each acceptance criterion.
 | R6.8 | 11.1, 11.2, 11.6 |
 | R6.9 | 11.1, 11.13 |
 | R6.10 | 1.3, 1.4, 1.5, 11.1, 11.13 |
+| R6.11 | 6.7 |
+| R6.12 | 6.7 |
+| R6.13 | 6.7 |
+| R6.14 | 6.7 |
+| R6.15 | 6.7, 15.13 |
+| R6.16 | 15.13 |
+| R6.17 | 6.7 |
+| R6.18 | 6.8 |
+| R6.19 | 15.14 |
 | R7.1 | 12.1, 12.3, 17.7, 19.7 |
 | R7.2 | 12.1, 12.3, 17.7, 19.7 |
 | R7.3 | 12.1, 12.3 |
@@ -1075,7 +1103,9 @@ Each design property maps to exactly one backend property test sub-task.
     { "id": 121, "tasks": ["15.11"] },
     { "id": 122, "tasks": ["6.6"] },
     { "id": 123, "tasks": ["15.12"] },
-    { "id": 124, "tasks": ["19.12"] }
+    { "id": 124, "tasks": ["19.12"] },
+    { "id": 125, "tasks": ["6.7"] },
+    { "id": 126, "tasks": ["15.13"] }
   ]
 }
 ```

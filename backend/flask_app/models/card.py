@@ -57,6 +57,13 @@ class Card(BaseModel):
         passive_deletes=True,
         order_by="(ChecklistItem.order_index, ChecklistItem.id)",
     )
+    notifications = db.relationship(
+        "Notification",
+        back_populates="card",
+        lazy="select",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     attachments = db.relationship(
         "Attachment",
         back_populates="card",

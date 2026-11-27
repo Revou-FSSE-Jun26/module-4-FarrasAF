@@ -139,7 +139,7 @@ test.describe("comments, mentions, and notifications", () => {
       });
       await bell.click();
       await expect(
-        memberPage.getByText("You were mentioned in a comment"),
+        memberPage.getByText(/You were mentioned in a comment on the card/),
       ).toBeVisible();
 
       await memberPage.getByRole("button", { name: "Mark as read" }).click();

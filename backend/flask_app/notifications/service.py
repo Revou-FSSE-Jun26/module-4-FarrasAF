@@ -3,12 +3,13 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, tuple_
+from sqlalchemy.orm import joinedload
 
 from flask_app.common.cursor import decode_cursor, encode_cursor
 from flask_app.common.exceptions import AuthorizationError, NotFoundError
 from flask_app.common.pagination import NOTIFICATIONS_PAGE_SIZE
 from flask_app.extensions import db
-from flask_app.models import BoardMembership, Notification, User
+from flask_app.models import BoardMembership, Comment, Notification, User
 
 
 def create_mention_notifications(
@@ -31,7 +32,11 @@ def create_mention_notifications(
     )
     created = [
         Notification(
-            recipient_id=user_id, comment_id=comment_id, board_id=board_id, status="unread"
+            recipient_id=user_id,
+            type="comment_mention",
+            comment_id=comment_id,
+            board_id=board_id,
+            status="unread",
         )
         for user_id in sorted(member_ids, key=str)
     ]
@@ -39,11 +44,55 @@ def create_mention_notifications(
     return created
 
 
+def should_notify_assignment(
+    previous_assignee_id: UUID | None, new_assignee_id: UUID | None, actor_id: UUID
+) -> bool:
+    """Pure rule (R6.11 to R6.13): notify only a new, different Assignee who is not the actor."""
+    if new_assignee_id is None or new_assignee_id == previous_assignee_id:
+        return False
+    return new_assignee_id != actor_id
+
+
+def create_assignment_notification(
+    card_id: UUID,
+    board_id: UUID,
+    previous_assignee_id: UUID | None,
+    new_assignee_id: UUID | None,
+    actor_id: UUID,
+) -> Notification | None:
+    """Add one unread "card assigned" Notification when the rule applies.
+
+    Never commits; the caller owns the transaction.
+    """
+    if new_assignee_id is None or not should_notify_assignment(
+        previous_assignee_id, new_assignee_id, actor_id
+    ):
+        return None
+    notification = Notification(
+        recipient_id=new_assignee_id,
+        type="card_assigned",
+        card_id=card_id,
+        board_id=board_id,
+        status="unread",
+    )
+    db.session.add(notification)
+    return notification
+
+
 def _notification_to_dict(notification: Notification) -> dict[str, Any]:
+    card = notification.card
+    if card is None and notification.comment is not None:
+        # comment_mention: the Card is the one the Comment belongs to (R6.15)
+        card = notification.comment.card
     return {
         "id": notification.id,
+        "recipient_id": notification.recipient_id,
+        "type": notification.type,
         "comment_id": notification.comment_id,
+        "card_id": notification.card_id,
+        "card_title": card.title if card is not None else None,
         "board_id": notification.board_id,
+        "board_name": notification.board.name,
         "status": notification.status,
         "created_at": notification.created_at,
     }
@@ -53,7 +102,15 @@ def list_notifications_service(user: User, payload: dict[str, Any]) -> dict[str,
     """Newest-first page of the user's Notifications; malformed cursor raises ValidationError."""
     cursor: str | None = payload.get("cursor")
     unread_only: bool = payload.get("unread_only", False)
-    query = select(Notification).where(Notification.recipient_id == user.id)
+    query = (
+        select(Notification)
+        .options(
+            joinedload(Notification.card),  # type: ignore[arg-type]
+            joinedload(Notification.comment).joinedload(Comment.card),  # type: ignore[arg-type]
+            joinedload(Notification.board),  # type: ignore[arg-type]
+        )
+        .where(Notification.recipient_id == user.id)
+    )
     if unread_only:
         query = query.where(Notification.status == "unread")
     if cursor is not None:

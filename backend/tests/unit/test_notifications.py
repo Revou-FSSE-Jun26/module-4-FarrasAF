@@ -5,8 +5,20 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 
-from flask_app.common.exceptions import AuthorizationError, NotFoundError, ValidationError
+from flask_app.cards.service import (
+    create_card_service,
+    delete_card_service,
+    move_card_service,
+    update_card_service,
+)
+from flask_app.common.exceptions import (
+    AuthorizationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 from flask_app.common.pagination import NOTIFICATIONS_PAGE_SIZE
 from flask_app.common.validation import load_schema
 from flask_app.extensions import db
@@ -16,6 +28,7 @@ from flask_app.notifications.service import (
     create_mention_notifications,
     list_notifications_service,
     mark_notification_read_service,
+    should_notify_assignment,
 )
 from tests.conftest import FakeClock
 
@@ -143,3 +156,158 @@ def test_query_schema() -> None:
         load_schema(NotificationsQuerySchema(), {"unread_only": "maybe"})
     with pytest.raises(ValidationError):
         load_schema(NotificationsQuerySchema(), {"page": "1"})
+
+
+# ---- Card assignment Notifications (R6.11 - R6.17) ----
+
+
+def _assignment_notifications(db_session: Any) -> list[Notification]:
+    db_session.expire_all()
+    return list(
+        db_session.scalars(select(Notification).where(Notification.type == "card_assigned"))
+    )
+
+
+def _board_with_members(
+    db_session: Any,
+    make_user: Callable[..., User],
+    make_board: Callable[..., Any],
+    make_column: Callable[..., Any],
+) -> tuple[User, User, Any]:
+    admin, member = make_user(), make_user()
+    board = make_board(admin=admin, name="Roadmap")
+    _add_member(db_session, board.id, member)
+    return admin, member, make_column(board=board)
+
+
+def test_should_notify_assignment_rule() -> None:
+    a, b, actor = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    assert should_notify_assignment(None, a, actor) is True
+    assert should_notify_assignment(a, b, actor) is True
+    assert should_notify_assignment(a, a, actor) is False
+    assert should_notify_assignment(a, None, actor) is False
+    assert should_notify_assignment(None, None, actor) is False
+    assert should_notify_assignment(a, actor, actor) is False
+    assert should_notify_assignment(None, actor, actor) is False
+
+
+def test_create_card_with_assignee_notifies_assignee(
+    db_session: Any,
+    make_user: Callable[..., User],
+    make_board: Callable[..., Any],
+    make_column: Callable[..., Any],
+) -> None:
+    admin, member, column = _board_with_members(db_session, make_user, make_board, make_column)
+    card = create_card_service(column.id, {"title": "Ship", "assignee_id": member.id}, admin)
+    rows = _assignment_notifications(db_session)
+    assert [(n.recipient_id, n.card_id, n.board_id, n.status) for n in rows] == [
+        (member.id, card["id"], column.board_id, "unread")
+    ]
+    assert rows[0].comment_id is None
+
+
+def test_create_card_without_assignee_or_self_assigned_creates_none(
+    db_session: Any,
+    make_user: Callable[..., User],
+    make_board: Callable[..., Any],
+    make_column: Callable[..., Any],
+) -> None:
+    admin, _member, column = _board_with_members(db_session, make_user, make_board, make_column)
+    create_card_service(column.id, {"title": "A"}, admin)
+    create_card_service(column.id, {"title": "B", "assignee_id": admin.id}, admin)
+    assert _assignment_notifications(db_session) == []
+
+
+def test_update_card_notifies_only_on_new_assignee(
+    db_session: Any,
+    make_user: Callable[..., User],
+    make_board: Callable[..., Any],
+    make_column: Callable[..., Any],
+) -> None:
+    admin, member, column = _board_with_members(db_session, make_user, make_board, make_column)
+    other = make_user()
+    _add_member(db_session, column.board_id, other)
+    card = create_card_service(column.id, {"title": "A"}, admin)
+    card_id = card["id"]
+    # empty -> member
+    update_card_service(card_id, {"assignee_id": member.id, "version": 1}, admin)
+    assert len(_assignment_notifications(db_session)) == 1
+    # unchanged assignee and other field edits: nothing new
+    update_card_service(card_id, {"assignee_id": member.id, "version": 2}, admin)
+    update_card_service(card_id, {"title": "A2", "version": 3}, admin)
+    assert len(_assignment_notifications(db_session)) == 1
+    # removal: nothing new
+    update_card_service(card_id, {"assignee_id": None, "version": 4}, admin)
+    assert len(_assignment_notifications(db_session)) == 1
+    # member -> other
+    update_card_service(card_id, {"assignee_id": member.id, "version": 5}, admin)
+    update_card_service(card_id, {"assignee_id": other.id, "version": 6}, admin)
+    recipients = sorted(str(n.recipient_id) for n in _assignment_notifications(db_session))
+    assert recipients == sorted(str(i) for i in (member.id, member.id, other.id))
+    # self-assignment by the actor: nothing new
+    update_card_service(card_id, {"assignee_id": admin.id, "version": 7}, admin)
+    assert len(_assignment_notifications(db_session)) == 3
+
+
+def test_rejected_edit_creates_no_assignment_notification(
+    db_session: Any,
+    make_user: Callable[..., User],
+    make_board: Callable[..., Any],
+    make_column: Callable[..., Any],
+) -> None:
+    admin, member, column = _board_with_members(db_session, make_user, make_board, make_column)
+    card = create_card_service(column.id, {"title": "A"}, admin)
+    with pytest.raises(ConflictError):
+        update_card_service(card["id"], {"assignee_id": member.id, "version": 99}, admin)
+    with pytest.raises(ValidationError):
+        update_card_service(card["id"], {"assignee_id": make_user().id, "version": 1}, admin)
+    assert _assignment_notifications(db_session) == []
+
+
+def test_move_card_creates_no_assignment_notification(
+    db_session: Any,
+    make_user: Callable[..., User],
+    make_board: Callable[..., Any],
+    make_column: Callable[..., Any],
+) -> None:
+    admin, member, column = _board_with_members(db_session, make_user, make_board, make_column)
+    card = create_card_service(column.id, {"title": "A", "assignee_id": member.id}, admin)
+    other_column = make_column(board=column.board, name="Doing")
+    move_card_service(card["id"], other_column.id, 0, admin)
+    assert len(_assignment_notifications(db_session)) == 1
+
+
+def test_list_includes_assignment_fields_and_mention_has_null_card(
+    db_session: Any,
+    make_user: Callable[..., User],
+    make_board: Callable[..., Any],
+    make_column: Callable[..., Any],
+    comment: Comment,
+) -> None:
+    admin, member, column = _board_with_members(db_session, make_user, make_board, make_column)
+    card = create_card_service(column.id, {"title": "Ship", "assignee_id": member.id}, admin)
+    _seed(db_session, comment, comment.card.board_id, member)
+    items = list_notifications_service(member, {})["items"]
+    by_type = {n["type"]: n for n in items}
+    assigned = by_type["card_assigned"]
+    assert assigned["card_id"] == card["id"]
+    assert assigned["card_title"] == "Ship"
+    assert assigned["board_name"] == "Roadmap"
+    assert assigned["comment_id"] is None
+    mention = by_type["comment_mention"]
+    assert mention["card_id"] is None
+    assert mention["card_title"] == comment.card.title
+    assert mention["comment_id"] == comment.id
+
+
+def test_delete_card_removes_its_assignment_notifications(
+    db_session: Any,
+    make_user: Callable[..., User],
+    make_board: Callable[..., Any],
+    make_column: Callable[..., Any],
+) -> None:
+    admin, member, column = _board_with_members(db_session, make_user, make_board, make_column)
+    card = create_card_service(column.id, {"title": "A", "assignee_id": member.id}, admin)
+    assert len(_assignment_notifications(db_session)) == 1
+    delete_card_service(card["id"], admin)
+    assert _assignment_notifications(db_session) == []

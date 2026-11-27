@@ -123,7 +123,7 @@ Role resolution reads the stored `BoardMembership` (and, for Team-scoped endpoin
 | Card_Service, to-do part (backend module `checklist/`) | To-do items of a Card: add, edit text, tick/untick, delete; at most 50 per Card; no Activity entries, no Card `version` | R20 |
 | Attachment_Service (backend module `attachments/`) | Upload (to Cloudinary), list through the Card, and delete Card Attachments; type, size, and count limits; uploader-or-Admin delete; Activity entries; Cloudinary cleanup on Card and Board delete | R22, R8.18, R8.19 |
 | Comment_Service | Top-level comments, threaded replies, edit/delete with cascade, optimistic concurrency | R5, R13 |
-| Notification_Service | Create mention notifications, cursor-paginated retrieval, unread filter, mark-as-read | R6 |
+| Notification_Service | Create mention and card-assignment notifications, cursor-paginated retrieval, unread filter, mark-as-read | R6 |
 | Search_Service | Case-insensitive title substring search across accessible boards, capped+ordered results | R7 |
 | Activity_Service | Record and page Board activity entries | R8 |
 | Analytics_Service | Card totals, per-column counts, completion rate, activity-by-day | R9 |
@@ -191,7 +191,7 @@ All application code lives under `frontend/src/` (`app/` for App Router pages, `
 
 - **App Router pages:** `/login`, `/register`, `/teams` (Team list and creation), `/teams/[teamId]` (members and join links), `/join/[token]` (accept a Team_Join_Link, login required), `/boards`, `/boards/[boardId]` (board view with columns/cards + drag-and-drop), `/boards/[boardId]/activity`, `/boards/[boardId]/analytics`, `/boards/[boardId]/settings`, `/invite/[token]` (anonymous Guest view, calls `/api/guest/...`), `/search`, `/profile` (the signed-in User's Profile: read-only email, display name form, change-password form; linked from the primary navigation; R18.11).
 - **State/data:** One typed API client in `src/lib/apiClient.ts` that calls same-origin `/api/...` paths (proxied to the backend by Next.js rewrites, never the backend URL). Authentication relies on `HttpOnly` cookies the browser sends automatically; the client never reads, stores, or attaches tokens, and nothing goes in `localStorage`/`sessionStorage`. On a `401` it calls the refresh endpoint once and retries, except on the auth endpoints and public pages. API request/response types are camelCase and live in `src/types/api.ts`. Board responses carry `currentUserRole` (`admin | member | guest`) and Team responses carry `currentUserTeamRole`; `GET /api/auth/me` returns identity only. The client never decodes tokens.
-- **Notifications:** Polled on an interval through `useNotifications`. Each poll requests the newest page **without a cursor**; `nextCursor` is used only to load older pages on demand (R6.2, R6.6).
+- **Notifications:** Polled on an interval through `useNotifications`. Each poll requests the newest page **without a cursor**; `nextCursor` is used only to load older pages on demand (R6.2, R6.6). `NotificationItem` renders by `type`: `You were mentioned in a comment on the card "<cardTitle>"` for `comment_mention` (R6.19), and `You were assigned to the card "<cardTitle>" in <boardName>` for `card_assigned`; both link to the Board (R6.16).
 - **Drag-and-drop:** Uses `@dnd-kit/core` + `@dnd-kit/sortable`. A hook computes the target column id and target order index, then calls the move endpoint; UI optimistically reorders and reconciles with the server's authoritative positions, rolling back on error (R4.3, R13).
 - **Mentions:** The mention picker inserts the token `@[<userId>]` into the Comment body when the user picks a Board member from `GET /api/boards/{boardId}/members`, and renders each token as `@displayName` (as plain text) by looking the id up in that members list, or as `@unknown` when the id is not found.
 - **Token pages:** `/invite/[token]` and `/join/[token]` send `Referrer-Policy: no-referrer` (configured in `next.config.ts`) and never leak the token into links, analytics, or storage.
@@ -226,6 +226,7 @@ erDiagram
     USER ||--o{ COMMENT : authors
     USER ||--o{ NOTIFICATION : receives
     COMMENT ||--o{ NOTIFICATION : triggers
+    CARD ||--o{ NOTIFICATION : "assignment triggers"
     BOARD ||--o{ ACTIVITY_ENTRY : logs
     USER ||--o{ ACTIVITY_ENTRY : acts
 ```
@@ -288,8 +289,9 @@ erDiagram
 - Self-referential `parent_comment_id` models threaded replies; replies must share the same `card_id` as the parent (R5.2, R5.8). Deleting a comment cascades to all descendant replies (R5.4).
 
 **Notification** — stored mention record.
-- `recipient_id` (FK User), `comment_id` (FK Comment), `board_id` (FK), `status` (enum: `unread` | `read`, default `unread`).
-- Unique `(recipient_id, comment_id)` enforces "exactly one Notification per distinct mentioned Member per Comment" (R6.1). Index on `(recipient_id, created_at desc, id desc)` and a partial variant filtered on `status = unread` to support cursor pagination and the unread-only filter (R6.2–R6.4, R6.7).
+- `recipient_id` (FK User), `type` (enum: `comment_mention` | `card_assigned`, default `comment_mention`), `comment_id` (FK Comment, nullable), `card_id` (FK Card, nullable, `ON DELETE CASCADE`, indexed), `board_id` (FK), `status` (enum: `unread` | `read`, default `unread`).
+- A check constraint requires `comment_id` for `comment_mention` and `card_id` for `card_assigned` (R6.1, R6.11). `type` and `status` use the enum-like pattern of `database.md` rule 4.
+- Unique `(recipient_id, comment_id)` enforces "exactly one Notification per distinct mentioned Member per Comment" (R6.1); rows of type `card_assigned` have a NULL `comment_id`, so the constraint does not apply to them. Index on `(recipient_id, created_at desc, id desc)` and a partial variant filtered on `status = unread` to support cursor pagination and the unread-only filter (R6.2–R6.4, R6.7).
 
 **InvitationLink** — shareable anonymous Guest-access token for a Board.
 - `board_id` (FK), `token` (unique, high-entropy via `secrets.token_urlsafe`), `status` (enum: `active` | `inactive`, default `active`), `created_by_id` (FK User).
@@ -400,7 +402,7 @@ Comments are returned as a flat list carrying `parentCommentId` (the client buil
 | GET | `/api/notifications?cursor=&unreadOnly=` | authenticated (recipient) | Cursor-paginated newest-first, <=50/page; newest page requested without a cursor | R6.2, R6.3, R6.4, R6.6, R6.7, R6.10 |
 | POST | `/api/notifications/{notificationId}/read` | authenticated (recipient) | Mark as read | R6.5, R6.9 |
 
-Ordering: `created_at DESC, id DESC`. The frontend polls the newest page **without** a cursor; the cursor is used only to load older pages on demand (R6.2, R6.6). With `cursor`, return items strictly after the decoded `(created_at, id)` position (R6.3, R6.7). `unreadOnly=true` applies the same pagination over unread items only (R6.4). The response is unwrapped as `{ items: [...], nextCursor }`; `nextCursor` encodes the last item's `(created_at, id)`. A malformed/invalid cursor yields a validation error and no items (R6.10). Marking a notification not addressed to the caller yields an authorization error, status unchanged (R6.9). Mention Notifications are created on Comment creation (R6.1, R6.8), not through these endpoints.
+Ordering: `created_at DESC, id DESC`. The frontend polls the newest page **without** a cursor; the cursor is used only to load older pages on demand (R6.2, R6.6). With `cursor`, return items strictly after the decoded `(created_at, id)` position (R6.3, R6.7). `unreadOnly=true` applies the same pagination over unread items only (R6.4). The response is unwrapped as `{ items: [...], nextCursor }`; `nextCursor` encodes the last item's `(created_at, id)`. A malformed/invalid cursor yields a validation error and no items (R6.10). Marking a notification not addressed to the caller yields an authorization error, status unchanged (R6.9). Mention Notifications are created on Comment creation (R6.1, R6.8) and assignment Notifications on Card creation and edit (R6.11 to R6.14), not through these endpoints. The list loads each Notification's Card and Board in the same query (eager loading, no N+1) to fill `cardTitle` and `boardName` (R6.15).
 
 ### Search_Service (R7)
 
@@ -624,8 +626,12 @@ These are the camelCase JSON shapes returned by the endpoints above. Field names
 {
   id: string,
   recipientId: string,
-  commentId: string,
+  type: "comment_mention" | "card_assigned",
+  commentId: string | null,   // set for comment_mention
+  cardId: string | null,      // set for card_assigned
+  cardTitle: string | null,   // current Card Title; for comment_mention, the Title of the Comment's Card (R6.18)
   boardId: string,
+  boardName: string,
   status: "unread" | "read",
   createdAt: string
 }
@@ -814,6 +820,10 @@ Card/Comment updates require the expected `version`; mismatch or missing version
 ### Analytics Completion Rate (R9)
 
 `completionRate = (sum of card counts over every column whose name == "Done") / totalCards`, clamped to `[0,1]`; returns `0` when `totalCards == 0` (R9.4) or no "Done" column exists (R9.6). Summing across all "Done"-named columns handles boards with more than one such column (R9.3).
+
+### Assignment Notifications (R6.11 to R6.17)
+
+`create_card_service` and `update_card_service` call a helper in `notifications/service.py` (`create_assignment_notification`, add-only, never commits) after the Card write succeeds and before the single commit. It creates one unread `card_assigned` Notification when the new `assignee_id` is not null, differs from the previous value (always true on create), and is not the acting User. Removing the Assignee, unchanged values, other field edits, and moves create nothing. The Assignee is already validated as a Board Member by `_validate_assignee`, so no extra membership check is needed. Because the edit is a conditional `UPDATE ... WHERE version = :expected`, a version conflict raises before the Notification is added. The pure decision `should_notify_assignment(previous_assignee_id, new_assignee_id, actor_id)` lives in `notifications/service.py` so it is unit-testable without the database. Deleting a Card removes its assignment Notifications through `ON DELETE CASCADE` on `notifications.card_id`. No new correctness property: the rules are covered by unit and API tests.
 
 ### Mention Notifications (R6)
 

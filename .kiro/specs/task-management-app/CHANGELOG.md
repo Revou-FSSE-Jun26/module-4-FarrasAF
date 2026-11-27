@@ -2,6 +2,34 @@
 
 All notable changes to the task-management-app spec are documented here. Versions are ordered newest-first. The version is bumped each time a spec document (requirements.md, design.md, or tasks.md) is changed.
 
+## v30 - 2026-11-27 - Card Title in mention Notifications
+### Changes
+- **Specification changes:** requirements.md Requirement 6 gains 6.18 (every "comment mention" Notification includes the Title of the Comment's Card) and 6.19 (text `You were mentioned in a comment on the card "<Card Title>"`).
+- **Design changes:** design.md Frontend Structure Notifications bullet and the Notification response schema comment for `cardTitle`.
+- **Implementation changes:** `notifications/service.py` fills `cardTitle` from the Comment's Card and eager-loads it; `NotificationItem.tsx` shows the new text; `e2e/comments.spec.ts` assertion updated. Tasks 6.8 and 15.14 added, mapping rows R6.18 and R6.19. No migration.
+- **Bug fixes:** none.
+- **Breaking changes:** none. `cardTitle` is now non-null for mention Notifications; `cardId` is still null for them.
+### Reason
+Users could not tell which Card a mention referred to.
+### Impact
+- Affected requirements: 6.18 and 6.19 added.
+- Affected design components: Notification response schema, Frontend Structure.
+- Affected implementation tasks: 6.8 and 15.14 added.
+
+## v29 - 2026-11-27 - Card assignment Notifications
+### Changes
+- **Specification changes:** requirements.md Requirement 6 is renamed "Notifications (Mentions and Card Assignments)" and gains 6.11 to 6.17: a Card created with an Assignee, or edited to a different Assignee, creates one unread "card assigned" Notification for the new Assignee in the same transaction; none when the Assignee is the acting User, when the Assignee is removed or unchanged, for other field edits, for moves, or when the request is rejected; every Notification reports its type, and assignment ones also the Card id, current Card Title, and Board name; the UI shows `You were assigned to the card "<Card Title>" in <Board name>` and opens the Board like a mention; deleting a Card deletes its assignment Notifications.
+- **Design changes:** design.md `Notification` entity gains `type` and a nullable `card_id`, `comment_id` becomes nullable with a check constraint per type; ER diagram, Notification_Service row and endpoint note, Notification response schema (`type`, `commentId` nullable, `cardId`, `cardTitle`, `boardName`), a new "Assignment Notifications" section, and the Frontend Structure bullet. No new property.
+- **Implementation changes:** see tasks 6.7 (backend, migration) and 15.13 (frontend), waves 125 and 126, and mapping rows R6.11 to R6.17.
+- **Bug fixes:** none.
+- **Breaking changes:** `commentId` in the Notification response can now be `null` (for `card_assigned`); the response gains `type`, `cardId`, `cardTitle`, and `boardName`.
+### Reason
+Request to notify a Member when they are assigned to a Card. Decisions confirmed with the user: notify only when a new Assignee is set (create or edit), no notification for self-assignment, text includes the Card title and Board name but not the assigner, selecting it opens the Board like a mention, and the Notification is deleted with its Card.
+### Impact
+- Affected requirements: 6.11 to 6.17 added; 6.1 to 6.10 unchanged.
+- Affected design components: Notification data model, Notification_Service, API response schema, Card_Service flow, Frontend Structure.
+- Affected implementation tasks: 6.7 and 15.13 added. No E2E test written; task 19 stays open.
+
 ## v28 - 2026-11-27 - Card attachments (Cloudinary)
 ### Changes
 - **Specification changes:** requirements.md gains Requirement 22 (criteria 22.1 to 22.17) and the glossary terms "Attachment" and "Attachment_Service": Members and Admins upload one file at a time to a Card (jpg, jpeg, png, webp, pdf, docx, xlsx, pptx, txt, csv; 1 byte to 5 MB; at most 5 per Card); files are stored in Cloudinary and downloaded from the public URL; the uploader or an Admin deletes; Guests never see Attachments; upload and delete do not change the Card's version or Updated timestamp and create no Notification; Cloudinary cleanup on Card and Board deletion is best effort. Requirement 8 gains 8.18 and 8.19 (Activity events "attachment added" and "attachment deleted"). The Introduction no longer lists file attachments as a V1 exclusion.

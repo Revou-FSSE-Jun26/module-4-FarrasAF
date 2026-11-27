@@ -133,9 +133,9 @@ The application targets clear visibility into task progress, task ownership, and
 7. IF a Member submits a Comment creation, reply, or edit request whose text is empty, contains only whitespace, or exceeds 5000 characters, THEN THE Comment_Service SHALL reject the request with a validation error indicating the Comment text is invalid and SHALL leave the Comments unchanged.
 8. IF a Member submits a reply referencing a parent Comment that does not exist or that belongs to a different Card, THEN THE Comment_Service SHALL reject the request with a validation error indicating the parent Comment is invalid and SHALL leave the Comments unchanged.
 
-### Requirement 6: Mention Notifications
+### Requirement 6: Notifications (Mentions and Card Assignments)
 
-**User Story:** As a Member, I want to be notified when I am mentioned in a Comment, so that I can respond to items that require my attention.
+**User Story:** As a Member, I want to be notified when I am mentioned in a Comment or assigned to a Card, so that I can respond to items that require my attention.
 
 #### Acceptance Criteria
 
@@ -149,6 +149,15 @@ The application targets clear visibility into task progress, task ownership, and
 8. IF a Comment mentions a User who is not a Member of the Board, THEN THE Notification_Service SHALL create no Notification for that User.
 9. IF a Member submits a request to mark a Notification that is not addressed to the requesting Member as read, THEN THE Notification_Service SHALL reject the request with an authorization error and SHALL leave the Notification's status unchanged.
 10. IF a Notification retrieval request, whether for the general Notification list or for new Notifications, supplies a cursor that is malformed or that does not encode a valid creation-timestamp-and-identifier pair, THEN THE Notification_Service SHALL reject the request with a validation error and SHALL return no Notifications.
+11. WHEN a Card is created with an Assignee, or a Card edit sets the Assignee to a User different from the previous Assignee, THE Notification_Service SHALL create exactly one unread Notification of type "card assigned" addressed to the new Assignee for that Card, in the same transaction as the Card change.
+12. IF the new Assignee is the User who made the change, THEN THE Notification_Service SHALL create no Notification.
+13. WHEN a Card edit removes the Assignee, leaves the Assignee unchanged, or changes only other fields, or WHEN a Card is moved or reordered, THE Notification_Service SHALL create no assignment Notification.
+14. IF a Card creation or edit is rejected, THEN THE Notification_Service SHALL create no assignment Notification.
+15. THE Notification_Service SHALL include in every Notification its type ("comment mention" or "card assigned"); for a "card assigned" Notification it SHALL also include the Card identifier, the Card's current Title, and the Board name.
+16. THE System SHALL show a "card assigned" Notification as the text `You were assigned to the card "<Card Title>" in <Board name>`, and selecting it SHALL open the Board, as for a mention Notification.
+17. WHEN a Card is deleted, THE Card_Service SHALL delete the "card assigned" Notifications for that Card; Board deletion continues to delete all of its Notifications (R1.6).
+18. THE Notification_Service SHALL also include, in every "comment mention" Notification, the current Title of the Card that the Comment belongs to.
+19. THE System SHALL show a "comment mention" Notification as the text `You were mentioned in a comment on the card "<Card Title>"`, and selecting it SHALL open the Board.
 
 ### Requirement 7: Card Search
 

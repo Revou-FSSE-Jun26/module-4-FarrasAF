@@ -1399,12 +1399,16 @@ components:
 
     Notification:
       type: object
-      required: [id, recipientId, commentId, boardId, status, createdAt]
+      required: [id, recipientId, type, commentId, cardId, cardTitle, boardId, boardName, status, createdAt]
       properties:
         id: { type: string, format: uuid }
         recipientId: { type: string, format: uuid }
-        commentId: { type: string, format: uuid }
+        type: { type: string, enum: [comment_mention, card_assigned] }
+        commentId: { type: string, format: uuid, nullable: true, description: Set for comment_mention. }
+        cardId: { type: string, format: uuid, nullable: true, description: Set for card_assigned. }
+        cardTitle: { type: string, nullable: true, description: Current Card Title; card_assigned only. }
         boardId: { type: string, format: uuid }
+        boardName: { type: string }
         status: { type: string, enum: [unread, read] }
         createdAt: { type: string, format: date-time }
 

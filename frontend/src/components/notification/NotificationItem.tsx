@@ -7,6 +7,16 @@ interface NotificationItemProps {
   onMarkRead: (notificationId: string) => void;
 }
 
+function notificationText(notification: Notification): string {
+  if (notification.type === 'card_assigned') {
+    return `You were assigned to the card "${notification.cardTitle ?? 'Untitled'}" in ${notification.boardName}`;
+  }
+  if (notification.cardTitle) {
+    return `You were mentioned in a comment on the card "${notification.cardTitle}"`;
+  }
+  return 'You were mentioned in a comment';
+}
+
 export default function NotificationItem({
   notification,
   onMarkRead,
@@ -23,7 +33,7 @@ export default function NotificationItem({
           href={`/boards/${encodeURIComponent(notification.boardId)}`}
           className="font-medium text-indigo-700 hover:underline"
         >
-          You were mentioned in a comment
+          {notificationText(notification)}
         </Link>
         <p className="mt-0.5 text-xs text-slate-500">
           {new Date(notification.createdAt).toLocaleString()}

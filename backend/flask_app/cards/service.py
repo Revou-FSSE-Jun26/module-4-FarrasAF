@@ -15,6 +15,7 @@ from flask_app.common.ordering import reindex
 from flask_app.common.time import utc_now
 from flask_app.extensions import db
 from flask_app.models import BoardMembership, Card, Column, User
+from flask_app.notifications.service import create_assignment_notification
 
 _EDITABLE_FIELDS = ("title", "description", "assignee_id", "due_date")
 
@@ -97,6 +98,7 @@ def create_card_service(column_id: UUID, payload: dict[str, Any], user: User) ->
     )
     db.session.add(card)
     db.session.flush()
+    create_assignment_notification(card.id, column.board_id, None, assignee_id, user.id)
     record_activity(
         column.board_id,
         user.id,
@@ -120,6 +122,7 @@ def update_card_service(card_id: UUID, payload: dict[str, Any], user: User) -> d
     expected = payload.get("version")
     if expected is None:
         raise ConflictError("Card version is required")
+    previous_assignee_id = card.assignee_id
     result = db.session.execute(
         update(Card)
         .where(Card.id == card_id, Card.version == expected)
@@ -129,6 +132,10 @@ def update_card_service(card_id: UUID, payload: dict[str, Any], user: User) -> d
     if result.rowcount == 0:  # type: ignore[attr-defined]
         raise ConflictError("Card was modified by someone else; reload and retry")
     db.session.refresh(card)
+    if "assignee_id" in changes:
+        create_assignment_notification(
+            card.id, card.board_id, previous_assignee_id, changes["assignee_id"], user.id
+        )
     record_activity(
         card.board_id, user.id, "card_updated", card.id, details={"card_title": card.title}
     )

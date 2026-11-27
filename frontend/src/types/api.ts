@@ -10,6 +10,7 @@ export type BoardVisibility = "private" | "team";
 export type BoardStatus = "active" | "archived";
 export type LinkStatus = "active" | "inactive";
 export type NotificationStatus = "unread" | "read";
+export type NotificationType = "comment_mention" | "card_assigned";
 
 export type ActivityEventType =
   | "card_created"
@@ -183,8 +184,12 @@ export interface Comment {
 export interface Notification {
   id: string;
   recipientId: string;
-  commentId: string;
+  type: NotificationType;
+  commentId: string | null;
+  cardId: string | null;
+  cardTitle: string | null;
   boardId: string;
+  boardName: string;
   status: NotificationStatus;
   createdAt: string;
 }

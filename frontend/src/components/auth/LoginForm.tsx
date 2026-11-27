@@ -37,6 +37,9 @@ export default function LoginForm() {
     try {
       await login({ email: email.trim(), password });
       router.replace(safeNextPath(searchParams.get('next')));
+      // Reset so the form is usable again if this page is kept alive by the
+      // router and shown again after logout.
+      setIsSubmitting(false);
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status < 500) {
         // Never reveal whether the email, password, or lockout caused the failure.
