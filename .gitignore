@@ -18,3 +18,5 @@ playwright-report/
 # Playwright output
 frontend/playwright-report/
 frontend/test-results/
+
+figma-output/

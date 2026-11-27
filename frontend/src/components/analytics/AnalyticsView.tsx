@@ -15,7 +15,7 @@ export default function AnalyticsView({ boardId }: AnalyticsViewProps) {
     useAnalytics(boardId);
 
   return (
-    <main className="flex flex-col gap-6 p-4">
+    <main className="rt-page max-w-5xl">
       <div className="flex flex-col gap-1">
         <Link
           href={`/boards/${boardId}`}
@@ -23,7 +23,8 @@ export default function AnalyticsView({ boardId }: AnalyticsViewProps) {
         >
           Back to Board
         </Link>
-        <h1 className="text-xl font-semibold text-gray-900">Analytics</h1>
+        <p className="rt-kicker mt-3 mb-3">Momentum check</p>
+        <h1 className="text-4xl font-bold text-gray-900">Analytics</h1>
       </div>
 
       {isLoading ? <BaseLoadingState /> : null}
@@ -36,15 +37,15 @@ export default function AnalyticsView({ boardId }: AnalyticsViewProps) {
             aria-label="Summary"
             className="grid grid-cols-1 gap-3 lg:grid-cols-2"
           >
-            <div className="rounded-md border border-gray-200 bg-white p-4">
-              <p className="text-sm text-gray-600">Total Cards</p>
-              <p className="text-2xl font-semibold text-gray-900">
+            <div className="rounded-2xl border-[1.5px] border-[#211621] bg-[#d9ff43] p-5 shadow-[4px_4px_0_#211621]">
+              <p className="font-mono text-xs font-semibold uppercase tracking-wider text-gray-600">Total cards</p>
+              <p className="mt-2 text-4xl font-bold text-gray-900">
                 {analytics.totalCards}
               </p>
             </div>
-            <div className="rounded-md border border-gray-200 bg-white p-4">
-              <p className="text-sm text-gray-600">Completion rate</p>
-              <p className="text-2xl font-semibold text-gray-900">
+            <div className="rounded-2xl border-[1.5px] border-[#211621] bg-[#ff7965] p-5 shadow-[4px_4px_0_#211621]">
+              <p className="font-mono text-xs font-semibold uppercase tracking-wider text-gray-600">Completion rate</p>
+              <p className="mt-2 text-4xl font-bold text-gray-900">
                 {Math.round(analytics.completionRate * 100)}%
               </p>
             </div>

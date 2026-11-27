@@ -147,7 +147,7 @@ export default function BoardSettingsView({ boardId }: BoardSettingsViewProps) {
   }
 
   return (
-    <main className="flex flex-col gap-6 p-4">
+    <main className="rt-page max-w-5xl">
       <div className="flex flex-col gap-1">
         <Link href="/boards" className="text-sm text-blue-600 hover:underline">
           Back to Boards

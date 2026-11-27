@@ -34,12 +34,13 @@ export default function TeamDetailView({ teamId }: TeamDetailViewProps) {
   }
 
   return (
-    <main className="flex flex-col gap-6 p-4">
+    <main className="rt-page max-w-5xl">
       <div className="flex flex-col gap-1">
         <Link href="/teams" className="text-sm text-blue-600 hover:underline">
           Back to Teams
         </Link>
-        <h1 className="text-xl font-semibold text-gray-900">{team.name}</h1>
+        <p className="rt-kicker mt-3 mb-3">Team space</p>
+        <h1 className="text-4xl font-bold text-gray-900">{team.name}</h1>
       </div>
       <section
         aria-labelledby="members-heading"

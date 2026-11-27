@@ -30,9 +30,12 @@ export default function ProfileView() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-col gap-6 p-4">
-      <h1 className="text-xl font-semibold text-gray-900">Profile</h1>
-      <section className="flex flex-col gap-1 rounded-lg border border-gray-200 bg-white p-6">
+    <main className="rt-page max-w-3xl">
+      <div>
+        <p className="rt-kicker mb-3">Personal settings</p>
+        <h1 className="text-4xl font-bold text-gray-900">Profile</h1>
+      </div>
+      <section className="rt-panel flex flex-col gap-1 p-6">
         <h2 className="text-sm font-medium text-gray-900">Email</h2>
         <p className="text-sm text-gray-700">{user.email}</p>
       </section>

@@ -31,7 +31,7 @@ export default function ActivityView({ boardId }: ActivityViewProps) {
   } = useActivity(boardId);
 
   return (
-    <main className="flex flex-col gap-4 p-4">
+    <main className="rt-page max-w-5xl">
       <div className="flex flex-col gap-1">
         <Link
           href={`/boards/${boardId}`}
@@ -39,7 +39,8 @@ export default function ActivityView({ boardId }: ActivityViewProps) {
         >
           Back to Board
         </Link>
-        <h1 className="text-xl font-semibold text-gray-900">Activity</h1>
+        <p className="rt-kicker mt-3 mb-3">Board history</p>
+        <h1 className="text-4xl font-bold text-gray-900">Activity</h1>
       </div>
 
       {isLoading ? <BaseLoadingState /> : null}
@@ -66,7 +67,7 @@ export default function ActivityView({ boardId }: ActivityViewProps) {
               {activity.items.map((entry) => (
                 <li
                   key={entry.id}
-                  className="flex flex-col gap-1 rounded-md border border-gray-200 bg-white p-3 text-sm lg:flex-row lg:justify-between"
+                  className="flex flex-col gap-2 rounded-xl border-[1.5px] border-[#211621] bg-[#fffdf7] p-4 text-sm shadow-[3px_3px_0_#211621] lg:flex-row lg:justify-between"
                 >
                   <span className="break-words text-gray-900">
                     {describeActivity(entry)}

@@ -17,10 +17,11 @@ export default function BoardsView() {
   const { teams } = useTeams();
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 lg:p-6">
+    <main className="rt-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+          <p className="rt-kicker mb-3">Your command center</p>
+          <h1 className="text-4xl font-bold tracking-tight text-slate-900">
             Boards
           </h1>
           <p className="mt-0.5 text-sm text-slate-500">
@@ -38,7 +39,7 @@ export default function BoardsView() {
         </BaseButton>
       </div>
       {isArchived ? null : (
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+        <div className="rt-panel p-5">
           <CreateBoardForm teams={teams} onBoardCreate={createBoard} />
         </div>
       )}
@@ -55,20 +56,21 @@ export default function BoardsView() {
           }
         />
       ) : (
-        <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-2xs">
+        <ul className="grid gap-4 sm:grid-cols-2">
           {boards.map((board) => (
             <li
               key={board.id}
-              className="flex items-center justify-between gap-3 px-4 py-3.5 text-sm transition-colors hover:bg-slate-50/80"
+              className="group relative flex min-h-40 flex-col justify-between overflow-hidden rounded-2xl border-[1.5px] border-[#211621] bg-[#fffdf7] p-5 text-sm shadow-[4px_4px_0_#211621] transition hover:-translate-y-1 hover:shadow-[7px_7px_0_#211621]"
             >
+              <span aria-hidden="true" className="absolute -right-6 -top-6 size-20 rotate-12 rounded-2xl bg-[#c9b7ef] transition-transform group-hover:rotate-45" />
               <Link
                 href={`/boards/${board.id}`}
-                className="font-medium text-slate-900 hover:text-indigo-700"
+                className="relative z-10 text-xl font-bold text-slate-900 after:absolute after:inset-0"
               >
                 {board.name}
               </Link>
-              <span className="flex items-center gap-3 text-slate-500">
-                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+              <span className="relative z-20 flex items-center justify-between gap-3 text-slate-500">
+                <span className="rounded-full border border-[#211621] bg-[#d9ff43] px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-[#211621]">
                   {board.currentUserRole === "admin" ? "Admin" : "Member"}
                 </span>
                 <Link

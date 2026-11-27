@@ -134,6 +134,6 @@ test.describe("profile", () => {
     await page.goto("/profile");
 
     await expect(page).toHaveURL(/\/login/);
-    await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Enter your workspace" })).toBeVisible();
   });
 });

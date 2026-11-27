@@ -2,6 +2,19 @@
 
 All notable changes to the task-management-app spec are documented here. Versions are ordered newest-first. The version is bumped each time a spec document (requirements.md, design.md, or tasks.md) is changed.
 
+## v26 - 2026-11-27 - RevoTask visual redesign
+### Changes
+- **Specification changes:** none. requirements.md is unchanged.
+- **Design changes:** design.md Frontend Structure gains a "Visual theme (RevoTask)" bullet (palette, fonts, `rt-*` classes, two-panel auth layout, new Login and Register headings). No endpoint, data model, or property change.
+- **Implementation changes:** UI imported from the Figma Make export (`figma-output/`, not committed): restyled `globals.css`, `layout.tsx`, `Base*` primitives, `AppShell`, board, card, team, profile, search, activity, and analytics views, and new `components/auth/AuthFrame.tsx`. Login heading "Log in" is now "Enter your workspace", Register heading "Create account" is now "Create your account", and the Login footer link "Register" now reads "Create one". E2E assertions in `auth.spec.ts` and `profile.spec.ts` updated to the new Login heading. Task 15.10 added (completed), wave 120 appended. The Figma `favicon.ico` was not copied (it was a 130-byte stub).
+- **Bug fixes:** none.
+- **Breaking changes:** none. Only visible text changed; button labels used by tests ("Log in", "Register") are unchanged.
+### Reason
+Request to apply a UI design made in Figma Make to the frontend. The export was a copy of this frontend with only presentation files changed, so it was merged file by file on the `figma-ui` branch.
+### Impact
+- Affected requirements: none.
+- Affected design components: Frontend Structure.
+- Affected implementation tasks: 15.10 added. `tsc --noEmit`, `npm run lint`, and `npm run build` pass; the Playwright suite was not run.
 ## v25 - 2026-11-26 - Only Members can be removed from a Board
 ### Changes
 - **Specification changes:** requirements.md Requirement 10 gains 10.10: a removal request for a Board member whose role is Admin (including the requester) is rejected with a validation error and membership stays unchanged, and Board settings shows no remove action for an Admin. 10.6 now covers role changes only, because removal can no longer take away an Admin. 10.2 is unchanged (it already said an Admin removes a Member).
