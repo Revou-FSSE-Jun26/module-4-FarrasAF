@@ -113,8 +113,8 @@ export default function BoardView() {
   );
 
   return (
-    <main className="flex flex-1 flex-col gap-5 p-4 lg:p-6">
-      <div className="flex flex-col gap-1 border-b border-slate-200/80 pb-4">
+    <main className="flex flex-1 flex-col gap-5 p-4 lg:p-7">
+      <div className="flex flex-col gap-2 border-b-2 border-[#211621] pb-5">
         <Link
           href="/boards"
           className="inline-flex w-fit items-center gap-1 text-xs font-medium text-slate-500 transition-colors hover:text-indigo-600"
@@ -135,7 +135,7 @@ export default function BoardView() {
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl font-semibold tracking-tight break-words text-slate-900">
+            <h1 className="text-3xl font-bold tracking-tight break-words text-slate-900">
               {board.name}
               {board.status === "archived" ? " (archived)" : ""}
             </h1>

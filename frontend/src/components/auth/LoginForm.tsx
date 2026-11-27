@@ -53,9 +53,13 @@ export default function LoginForm() {
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-gray-200 bg-white p-6"
+      className="rt-panel flex w-full max-w-md flex-col gap-5 p-7 lg:p-9"
     >
-      <h1 className="text-xl font-semibold text-gray-900">Log in</h1>
+      <div>
+        <p className="rt-kicker mb-4">Welcome back</p>
+        <h1 className="text-3xl font-bold text-gray-900">Enter your workspace</h1>
+        <p className="mt-2 text-sm text-gray-600">Pick up where your team left off.</p>
+      </div>
       <BaseInput
         label="Email"
         type="email"
@@ -79,10 +83,10 @@ export default function LoginForm() {
       <BaseButton type="submit" isLoading={isSubmitting}>
         Log in
       </BaseButton>
-      <p className="text-sm text-gray-600">
+      <p className="border-t border-[#211621]/15 pt-4 text-sm text-gray-600">
         No account?{' '}
-        <Link href="/register" className="text-blue-600 hover:underline">
-          Register
+        <Link href="/register" className="font-semibold text-[#3f2548] underline decoration-[#ff7965] decoration-2 underline-offset-4">
+          Create one
         </Link>
       </p>
     </form>

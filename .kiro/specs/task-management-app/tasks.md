@@ -518,6 +518,11 @@ Conventions applied to every task (see steering `tech`, `structure`, `card-conve
     - Computed from the loaded Board data; no endpoint, API type, or dependency
     - _Requirements: 21.1, 21.2, 21.3, 21.4, 21.5, 21.6_
 
+  - [x] 15.10 Apply the RevoTask visual theme
+    - Imported from the Figma Make export: `app/globals.css` (palette, `rt-*` classes, Slate/Gray remap), `app/layout.tsx` (Space Grotesk, IBM Plex Mono, title "RevoTask"), new `components/auth/AuthFrame.tsx` used by `/login` and `/register`, restyled `Base*` primitives, `AppShell`, board, card, team, profile, search, activity, and analytics views
+    - Appearance and copy only: no hook, API, route, type, or dependency change. E2E heading assertions in `auth.spec.ts` and `profile.spec.ts` updated to "Enter your workspace"
+    - No requirement change
+
 - [x] 16. Teams UI
   - [x] 16.1 Implement Teams pages and join flow
     - `useTeams` hook, `/teams` (list and create), `/teams/[teamId]` (members; join-link create, list, revoke shown only when `currentUserTeamRole` is `team_admin`), `/join/[token]` (preview the Team name, call accept only after confirmation, one generic invalid-link message, login redirect and return)
@@ -1016,7 +1021,8 @@ Each design property maps to exactly one backend property test sub-task.
     { "id": 116, "tasks": ["15.7"] },
     { "id": 117, "tasks": ["6.5"] },
     { "id": 118, "tasks": ["15.8"] },
-    { "id": 119, "tasks": ["15.9"] }
+    { "id": 119, "tasks": ["15.9"] },
+    { "id": 120, "tasks": ["15.10"] }
   ]
 }
 ```

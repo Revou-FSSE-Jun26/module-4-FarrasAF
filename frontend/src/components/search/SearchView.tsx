@@ -21,12 +21,15 @@ export default function SearchView() {
   }
 
   return (
-    <main className="flex flex-col gap-4 p-4">
-      <h1 className="text-xl font-semibold text-gray-900">Search Cards</h1>
+    <main className="rt-page">
+      <div>
+        <p className="rt-kicker mb-3">Find the signal</p>
+        <h1 className="text-4xl font-bold text-gray-900">Search cards</h1>
+      </div>
       <form
         onSubmit={handleSubmit}
         noValidate
-        className="flex flex-col gap-2 lg:flex-row lg:items-end"
+        className="rt-panel flex flex-col gap-3 p-5 lg:flex-row lg:items-end"
       >
         <div className="lg:max-w-md lg:flex-1">
           <BaseInput
@@ -55,7 +58,7 @@ export default function SearchView() {
             {results.map((result) => (
               <li
                 key={result.id}
-                className="rounded-md border border-gray-200 bg-white p-3"
+                className="rounded-xl border-[1.5px] border-[#211621] bg-[#fffdf7] p-4 shadow-[3px_3px_0_#211621] transition hover:-translate-y-0.5"
               >
                 <p className="font-medium break-words text-gray-900">
                   {result.title}

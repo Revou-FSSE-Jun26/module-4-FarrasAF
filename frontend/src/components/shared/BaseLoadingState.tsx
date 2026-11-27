@@ -13,7 +13,7 @@ export default function BaseLoadingState({
     >
       <span
         aria-hidden="true"
-        className="size-4 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600"
+        className="size-5 animate-spin rounded-full border-2 border-[#211621]/20 border-t-[#3f2548]"
       />
       <span>{label}</span>
     </div>

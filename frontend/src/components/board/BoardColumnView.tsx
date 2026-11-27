@@ -81,10 +81,10 @@ export default function BoardColumnView({
   return (
     <section
       aria-label={column.name}
-      className={`group/col flex w-full flex-col gap-3 rounded-xl border p-3 transition-colors lg:min-w-0 lg:flex-1 ${
+      className={`group/col flex w-full flex-col gap-3 rounded-2xl border-[1.5px] p-3.5 shadow-[3px_3px_0_#211621] transition-colors lg:min-w-0 lg:flex-1 ${
         isOver
-          ? "border-indigo-300 bg-indigo-50/50 ring-2 ring-indigo-500/20"
-          : "border-slate-200/70 bg-slate-100/80"
+          ? "border-[#211621] bg-[#d9ff43]/40 ring-2 ring-[#ff7965]"
+          : "border-[#211621] bg-[#e8dfca]"
       }`}
     >
       {isRenaming ? (
@@ -120,10 +120,10 @@ export default function BoardColumnView({
       ) : (
         <div className="flex items-start justify-between gap-2 px-1">
           <div className="flex min-w-0 items-center gap-2 pt-0.5">
-            <h2 className="text-[13px] font-semibold tracking-tight break-words text-slate-800">
+            <h2 className="font-mono text-[12px] font-semibold uppercase tracking-[0.06em] break-words text-slate-800">
               {column.name}
             </h2>
-            <span className="shrink-0 rounded-full bg-slate-200/80 px-2 py-0.5 text-[11px] font-medium text-slate-600 tabular-nums">
+            <span className="shrink-0 rounded-full border border-[#211621] bg-[#c9b7ef] px-2 py-0.5 text-[11px] font-bold text-[#211621] tabular-nums">
               {cards.length}
             </span>
           </div>

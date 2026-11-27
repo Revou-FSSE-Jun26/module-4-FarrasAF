@@ -77,9 +77,13 @@ export default function RegisterForm() {
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-gray-200 bg-white p-6"
+      className="rt-panel flex w-full max-w-md flex-col gap-5 p-7 lg:p-9"
     >
-      <h1 className="text-xl font-semibold text-gray-900">Create account</h1>
+      <div>
+        <p className="rt-kicker mb-4">Start moving</p>
+        <h1 className="text-3xl font-bold text-gray-900">Create your account</h1>
+        <p className="mt-2 text-sm text-gray-600">A calmer way to make progress together.</p>
+      </div>
       <BaseInput
         label="Display name"
         autoComplete="nickname"
@@ -106,9 +110,9 @@ export default function RegisterForm() {
       <BaseButton type="submit" isLoading={isSubmitting}>
         Register
       </BaseButton>
-      <p className="text-sm text-gray-600">
+      <p className="border-t border-[#211621]/15 pt-4 text-sm text-gray-600">
         Already registered?{' '}
-        <Link href="/login" className="text-blue-600 hover:underline">
+        <Link href="/login" className="font-semibold text-[#3f2548] underline decoration-[#ff7965] decoration-2 underline-offset-4">
           Log in
         </Link>
       </p>

@@ -11,13 +11,13 @@ interface BaseButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLASSES: Record<BaseButtonVariant, string> = {
   primary:
-    'bg-indigo-600 text-white shadow-xs hover:bg-indigo-700 active:bg-indigo-800',
+    'border-[1.5px] border-[#211621] bg-[#d9ff43] text-[#211621] shadow-[3px_3px_0_#211621] hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#211621] active:translate-y-0 active:shadow-[1px_1px_0_#211621]',
   secondary:
-    'border border-slate-200 bg-white text-slate-700 shadow-2xs hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900',
+    'border-[1.5px] border-[#211621] bg-[#fffdf7] text-[#211621] shadow-[2px_2px_0_#211621] hover:bg-[#c9b7ef] hover:text-[#211621]',
   danger:
-    'bg-rose-600 text-white shadow-xs hover:bg-rose-700 active:bg-rose-800',
+    'border-[1.5px] border-[#211621] bg-[#ff7965] text-[#211621] shadow-[3px_3px_0_#211621] hover:bg-[#ff927f]',
   ghost:
-    'bg-transparent text-slate-600 hover:bg-slate-200/70 hover:text-slate-900',
+    'bg-transparent text-current hover:bg-[#d9ff43] hover:text-[#211621]',
 };
 
 const SIZE_CLASSES: Record<BaseButtonSize, string> = {
@@ -40,7 +40,7 @@ export default function BaseButton({
       type={type}
       disabled={disabled || isLoading}
       aria-busy={isLoading}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${SIZE_CLASSES[size]} ${VARIANT_CLASSES[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff7965] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${SIZE_CLASSES[size]} ${VARIANT_CLASSES[variant]} ${className}`}
       {...rest}
     >
       {children}

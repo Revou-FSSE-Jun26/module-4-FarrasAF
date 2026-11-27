@@ -31,14 +31,14 @@ export default function BaseModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-slate-950/40 p-0 backdrop-blur-[2px] lg:items-center lg:p-4"
+      className="fixed inset-0 z-40 flex items-end justify-center bg-[#211621]/70 p-0 backdrop-blur-[3px] lg:items-center lg:p-4"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-900/5 lg:max-w-lg lg:rounded-xl lg:p-6"
+        className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border-[1.5px] border-[#211621] bg-[#fffdf7] p-5 shadow-[7px_7px_0_#d9ff43] lg:max-w-lg lg:rounded-2xl lg:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between gap-4 border-b border-slate-100 pb-3.5">

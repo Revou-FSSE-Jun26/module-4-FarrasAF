@@ -46,12 +46,12 @@ export default function CardItem({
       style={style}
       onClick={() => onCardOpen?.(card.id)}
       data-testid="card-item"
-      className={`group/card rounded-lg border p-3 text-sm text-slate-900 transition duration-150 ${
+      className={`group/card rounded-xl border-[1.5px] p-3.5 text-sm text-slate-900 transition duration-150 ${
         isOverlay
           ? "rotate-1 cursor-grabbing list-none border-indigo-300 bg-white shadow-xl ring-2 ring-indigo-500/20"
           : isDragging
             ? "border-dashed border-indigo-300 bg-slate-50 opacity-40 shadow-none"
-            : "border-slate-200/90 bg-white shadow-2xs hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm"
+            : "border-[#211621]/70 bg-[#fffdf7] shadow-[2px_2px_0_#211621] hover:-translate-y-0.5 hover:border-[#211621] hover:shadow-[4px_4px_0_#211621]"
       } ${dragProps ? "cursor-grab touch-manipulation" : "cursor-pointer"}`}
     >
       <p className="text-[13.5px] leading-snug font-medium break-words text-slate-900">

@@ -42,7 +42,7 @@ export default function ChangePasswordForm({
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-6"
+      className="rt-panel flex flex-col gap-4 p-6"
     >
       <h2 className="text-lg font-semibold text-gray-900">Change password</h2>
       <BaseInput
